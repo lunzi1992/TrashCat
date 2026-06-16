@@ -21,6 +21,7 @@
 		A10011 /* CleanManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10011; };
 		A10012 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10012; };
 		A10018 /* FileCategorizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10018; };
+		A10019 /* RiskAssessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10019; };
 		A10013 /* PermissionGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10013; };
 		A10014 /* ScanningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10014; };
 		A10015 /* ResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10015; };
@@ -43,6 +44,7 @@
 		F10011 /* CleanManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanManager.swift; sourceTree = "<group>"; };
 		F10012 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 		F10018 /* FileCategorizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileCategorizer.swift; sourceTree = "<group>"; };
+		F10019 /* RiskAssessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiskAssessor.swift; sourceTree = "<group>"; };
 		F10013 /* PermissionGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionGuideView.swift; sourceTree = "<group>"; };
 		F10014 /* ScanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanningView.swift; sourceTree = "<group>"; };
 		F10015 /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
@@ -116,6 +118,7 @@
 			children = (
 				F10012 /* PermissionManager.swift */,
 				F10018 /* FileCategorizer.swift */,
+				F10019 /* RiskAssessor.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -215,6 +218,7 @@
 				A10011 /* CleanManager.swift in Sources */,
 				A10012 /* PermissionManager.swift in Sources */,
 				A10018 /* FileCategorizer.swift in Sources */,
+				A10019 /* RiskAssessor.swift in Sources */,
 				A10013 /* PermissionGuideView.swift in Sources */,
 				A10014 /* ScanningView.swift in Sources */,
 				A10015 /* ResultsView.swift in Sources */,

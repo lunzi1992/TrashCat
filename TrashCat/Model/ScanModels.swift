@@ -1,5 +1,62 @@
 import Foundation
 
+// MARK: - Risk Level
+
+enum RiskLevel: String, Comparable, CaseIterable {
+    case safe    = "recommended"  // 推荐清理
+    case caution = "review"       // 需要确认
+    case danger  = "warning"      // 谨慎处理
+
+    var displayName: String {
+        switch self {
+        case .safe:    return "推荐清理"
+        case .caution: return "需要确认"
+        case .danger:  return "谨慎处理"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .safe:    return "checkmark.shield"
+        case .caution: return "exclamationmark.shield"
+        case .danger:  return "xmark.shield"
+        }
+    }
+
+    var headerColor: String {
+        switch self {
+        case .safe:    return "green"
+        case .caution: return "orange"
+        case .danger:  return "red"
+        }
+    }
+
+    /// Should items at this level be selected by default?
+    var defaultSelected: Bool {
+        switch self {
+        case .safe:    return true
+        case .caution: return false
+        case .danger:  return false
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .safe:
+            return "这些是系统或应用的临时缓存、过期日志文件，删除不会影响任何应用正常运行。"
+        case .caution:
+            return "这些文件删除后应用会在下次启动时重建，但可能短暂影响启动速度或需要重新登录。建议确认后再清理。"
+        case .danger:
+            return "这些包含用户数据、开发产物或配置残留。删除后可能无法恢复，且相关应用可能立即出现异常。请逐项确认。"
+        }
+    }
+
+    static func < (lhs: RiskLevel, rhs: RiskLevel) -> Bool {
+        let order: [RiskLevel] = [.safe, .caution, .danger]
+        return order.firstIndex(of: lhs)! < order.firstIndex(of: rhs)!
+    }
+}
+
 // MARK: - Clean Category
 
 enum CleanCategory: String, CaseIterable, Identifiable {
@@ -19,7 +76,7 @@ enum CleanCategory: String, CaseIterable, Identifiable {
         case .logs:         return "日志文件"
         case .temp:         return "临时文件"
         case .trash:        return "废纸篓"
-        case .orphan:       return "应用残留"
+        case .orphan:       return "可能的应用残留"
         }
     }
 
@@ -63,6 +120,16 @@ struct CleanItem: Identifiable, Equatable {
     /// What kind of file this is (缓存 / 日志 / 配置 / etc.)
     var fileType: String {
         FileCategorizer.fileType(for: path, name: name)
+    }
+
+    /// How risky this item is to delete
+    var riskLevel: RiskLevel {
+        RiskAssessor.assess(path: path, category: category, name: name)
+    }
+
+    /// Should this item be selected for cleanup by default?
+    var defaultSelected: Bool {
+        riskLevel.defaultSelected
     }
 }
 

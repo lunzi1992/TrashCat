@@ -1,9 +1,15 @@
 import SwiftUI
 import AppKit
 
-private enum ViewMode: String, CaseIterable {
-    case byCategory = "按分类"
+private extension Set {
+    mutating func toggleMember(_ member: Element) {
+        if contains(member) { remove(member) } else { insert(member) }
+    }
+}
+
+private enum GroupMode: String, CaseIterable {
     case byApp = "按应用"
+    case byCategory = "按类型"
 }
 
 struct ResultsView: View {
@@ -13,37 +19,47 @@ struct ResultsView: View {
     @State private var showConfirmClean = false
     @State private var cleanResult: CleanResult?
     @State private var isCleaning = false
-    @State private var expandedCategories: Set<String> = []
-    @State private var expandedApps: Set<String> = []
+    @State private var expandedTiers: Set<String> = []
+    @State private var expandedGroups: Set<String> = []
     @State private var selectedItems: Set<UUID> = []
-    @State private var viewMode: ViewMode = .byCategory
+    @State private var groupMode: GroupMode = .byApp
 
-    private let maxPreview = 30
+    private let maxPreview = 20
 
     // MARK: - Derived
 
-    private var allItemIDs: Set<UUID> {
-        Set(summary.results.flatMap { $0.items }.map { $0.id })
+    private var allItems: [CleanItem] { summary.results.flatMap { $0.items } }
+
+    private var tieredGroups: [(RiskLevel, [CleanItem])] {
+        var map: [RiskLevel: [CleanItem]] = [:]
+        for item in allItems {
+            map[item.riskLevel, default: []].append(item)
+        }
+        let trashItems = allItems.filter { $0.category == .trash }
+        var groups: [(RiskLevel, [CleanItem])] = []
+        for level: RiskLevel in [.safe, .caution, .danger] {
+            let items = (map[level] ?? []).filter { $0.category != .trash }
+            if !items.isEmpty { groups.append((level, items)) }
+        }
+        if !trashItems.isEmpty { groups.append((.safe, trashItems)) }
+        return groups
     }
 
     private var selectedSize: Int64 {
-        summary.results.flatMap { $0.items }
-            .filter { selectedItems.contains($0.id) }
-            .reduce(0) { $0 + $1.size }
+        allItems.filter { selectedItems.contains($0.id) }.reduce(0) { $0 + $1.size }
     }
 
-    private var selectedCount: Int {
-        selectedItems.count
-    }
+    private var selectedCount: Int { selectedItems.count }
 
     var body: some View {
         if let result = cleanResult {
-            CleanReportView(result: result) {
-                coordinator.state = .idle
-            }
+            CleanReportView(result: result) { coordinator.state = .idle }
         } else {
             mainResultsView
-                .onAppear { selectedItems = allItemIDs }
+                .onAppear {
+                    // Default-select only safe items
+                    selectedItems = Set(allItems.filter { $0.defaultSelected }.map { $0.id })
+                }
         }
     }
 
@@ -54,35 +70,33 @@ struct ResultsView: View {
             headerView
             Divider()
 
-            // View mode picker
             if !summary.isEmpty {
-                Picker("", selection: $viewMode) {
-                    ForEach(ViewMode.allCases, id: \.rawValue) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
+                Picker("", selection: $groupMode) {
+                    ForEach(GroupMode.allCases, id: \.rawValue) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 16).padding(.vertical, 6)
             }
 
             Divider()
 
             ScrollView {
-                switch viewMode {
-                case .byCategory:
-                    categoryListView
-                case .byApp:
-                    appListView
+                if summary.isEmpty {
+                    emptyStateView.padding(40)
+                } else {
+                    LazyVStack(spacing: 12) {
+                        ForEach(tieredGroups, id: \.0.rawValue) { tier, items in
+                            tierSection(tier: tier, items: items)
+                        }
+                    }
+                    .padding(12)
                 }
             }
 
             footerView
         }
-        .frame(minHeight: 460)
-        .sheet(isPresented: $showConfirmClean) {
-            confirmCleanSheet
-        }
+        .frame(minHeight: 500)
+        .sheet(isPresented: $showConfirmClean) { confirmCleanSheet }
     }
 
     // MARK: - Header
@@ -91,29 +105,17 @@ struct ResultsView: View {
         VStack(spacing: 8) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("扫描完成")
-                        .font(.title3).fontWeight(.bold)
+                    Text("扫描完成").font(.title3).fontWeight(.bold)
                     Text("用时 \(String(format: "%.1f", summary.scanDuration)) 秒")
                         .font(.caption).foregroundColor(.secondary)
                 }
                 Spacer()
                 HStack(spacing: 12) {
-                    Button(selectedItems == allItemIDs ? "取消全选" : "全选") {
-                        if selectedItems == allItemIDs { selectedItems = [] }
-                        else { selectedItems = allItemIDs }
-                    }
-                    .font(.caption)
-
-                    Button("重新扫描") {
-                        Task { await coordinator.startScan() }
-                    }
-                    .font(.caption)
+                    Button("重新扫描") { Task { await coordinator.startScan() } }.font(.caption)
                 }
             }
 
-            if summary.isEmpty {
-                emptyStateView
-            } else {
+            if !summary.isEmpty {
                 HStack(spacing: 24) {
                     VStack {
                         Text(selectedSize.formattedSize)
@@ -122,7 +124,7 @@ struct ResultsView: View {
                             .font(.caption).foregroundColor(.secondary)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)
             }
         }
         .padding(20)
@@ -134,210 +136,201 @@ struct ResultsView: View {
             Text("你的 Mac 很干净！").font(.headline)
             Text("没找到任何垃圾文件，好猫表示很满意。").font(.caption).foregroundColor(.secondary)
         }
-        .padding(.vertical, 32)
     }
 
-    // MARK: - Category View
+    // MARK: - Tier Section
 
-    private var categoryListView: some View {
-        LazyVStack(spacing: 0) {
-            ForEach(summary.results, id: \.category.rawValue) { result in
-                if !result.items.isEmpty {
-                    categoryRow(result)
-                    Divider().padding(.leading, 52)
-                }
+    private func tierSection(tier: RiskLevel, items: [CleanItem]) -> some View {
+        let tierKey = tier.rawValue
+        let isExpanded = expandedTiers.contains(tierKey)
+        let tierIDs = Set(items.map { $0.id })
+        let allSelected = tierIDs.isSubset(of: selectedItems)
+        let someSelected = !tierIDs.isDisjoint(with: selectedItems)
+        let tierSize = items.reduce(0) { $0 + $1.size }
+
+        // color
+        let tintColor: Color = {
+            switch tier {
+            case .safe:    return .green
+            case .caution: return .orange
+            case .danger:  return .red
             }
-        }
-    }
-
-    private func categoryRow(_ result: ScanResult) -> some View {
-        let isExpanded = expandedCategories.contains(result.category.rawValue)
-        let catIDs = Set(result.items.map { $0.id })
-        let allSelected = catIDs.isSubset(of: selectedItems)
-        let someSelected = !catIDs.isDisjoint(with: selectedItems)
+        }()
 
         return VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                // Checkbox
-                Button(action: {
-                    if allSelected { selectedItems.subtract(catIDs) }
-                    else { selectedItems.formUnion(catIDs) }
-                }) {
-                    Image(systemName: allSelected ? "checkmark.square.fill" :
-                                        someSelected ? "minus.square" : "square")
-                        .font(.title3)
-                        .foregroundColor(allSelected ? .accentColor : .secondary)
-                        .frame(width: 24)
-                }
-                .buttonStyle(.plain)
-
-                // Category info button
-                Button(action: {
-                    withAnimation {
-                        if isExpanded { expandedCategories.remove(result.category.rawValue) }
-                        else { expandedCategories.insert(result.category.rawValue) }
+            // Tier header
+            Button(action: {
+                withAnimation { expandedTiers.toggleMember(tierKey) }
+            }) {
+                HStack(spacing: 10) {
+                    // Checkbox
+                    Button(action: {
+                        if allSelected { selectedItems.subtract(tierIDs) }
+                        else { selectedItems.formUnion(tierIDs) }
+                    }) {
+                        Image(systemName: allSelected ? "checkmark.square.fill" :
+                                            someSelected ? "minus.square" : "square")
+                            .font(.title3)
+                            .foregroundColor(allSelected ? .accentColor : .secondary)
+                            .frame(width: 22)
                     }
-                }) {
-                    HStack(spacing: 12) {
-                        Image(systemName: result.category.iconName)
-                            .font(.title3).foregroundColor(.accentColor).frame(width: 24)
+                    .buttonStyle(.plain)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(result.category.displayName).font(.body)
-                            Text(result.category.description)
+                    Image(systemName: tier.iconName)
+                        .foregroundColor(tintColor)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(tier.displayName).font(.headline)
+                            Text("\(items.count) 项").font(.caption).foregroundColor(.secondary)
+                        }
+                        if !isExpanded {
+                            Text(tier.explanation)
                                 .font(.caption).foregroundColor(.secondary)
+                                .lineLimit(2)
                         }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(result.totalSize.formattedSize).font(.body).fontWeight(.medium)
-                            Text("\(result.fileCount) 个文件").font(.caption).foregroundColor(.secondary)
-                        }
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption).foregroundColor(.secondary)
                     }
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
 
+                    Spacer()
+
+                    Text(tierSize.formattedSize)
+                        .font(.body).fontWeight(.medium)
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+                .padding(12)
+            }
+            .buttonStyle(.plain)
+            .background(tintColor.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            // Expanded content
             if isExpanded {
-                itemList(result.items)
-            }
-        }
-    }
+                VStack(spacing: 4) {
+                    Text(tier.explanation)
+                        .font(.caption).foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12).padding(.top, 6)
 
-    // MARK: - App View
-
-    private var appListView: some View {
-        let grouped = Dictionary(grouping: summary.results.flatMap { $0.items }, by: { $0.appName })
-            .sorted(by: { $0.key < $1.key })
-
-        return LazyVStack(spacing: 0) {
-            ForEach(grouped, id: \.key) { appName, items in
-                let isExpanded = expandedApps.contains(appName)
-                let appIDs = Set(items.map { $0.id })
-                let allSelected = appIDs.isSubset(of: selectedItems)
-                let someSelected = !appIDs.isDisjoint(with: selectedItems)
-                let appSize = items.reduce(0) { $0 + $1.size }
-
-                VStack(spacing: 0) {
-                    HStack(spacing: 12) {
-                        Button(action: {
-                            if allSelected { selectedItems.subtract(appIDs) }
-                            else { selectedItems.formUnion(appIDs) }
-                        }) {
-                            Image(systemName: allSelected ? "checkmark.square.fill" :
-                                                someSelected ? "minus.square" : "square")
-                                .font(.title3)
-                                .foregroundColor(allSelected ? .accentColor : .secondary)
-                                .frame(width: 24)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button(action: {
-                            withAnimation {
-                                if isExpanded { expandedApps.remove(appName) }
-                                else { expandedApps.insert(appName) }
-                            }
-                        }) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "app.fill")
-                                    .font(.title3).foregroundColor(.accentColor).frame(width: 24)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(appName).font(.body)
-                                    // Show top categories for this app
-                                    let cats = Set(items.map { $0.category.displayName }).sorted().prefix(3).joined(separator: "、")
-                                    Text(cats).font(.caption).foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    Text(appSize.formattedSize).font(.body).fontWeight(.medium)
-                                    Text("\(items.count) 项").font(.caption).foregroundColor(.secondary)
-                                }
-                                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                    .font(.caption).foregroundColor(.secondary)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .contentShape(Rectangle())
-
-                    if isExpanded {
-                        itemList(items)
-                    }
+                    groupedContent(items: items, tier: tier)
                 }
-                Divider().padding(.leading, 52)
+                .padding(.bottom, 8)
             }
         }
+        .padding(.horizontal, 4)
     }
 
-    // MARK: - Item List (shared)
+    // MARK: - Grouped Content
 
     @ViewBuilder
-    private func itemList(_ items: [CleanItem]) -> some View {
+    private func groupedContent(items: [CleanItem], tier: RiskLevel) -> some View {
+        let dict = groupMode == .byApp
+            ? Dictionary(grouping: items, by: { $0.appName })
+            : Dictionary(grouping: items, by: { $0.category.displayName })
+        let groups = dict.map { ($0.key, $0.value) }.sorted { $0.0 < $1.0 }
+
+        ForEach(Array(groups.enumerated()), id: \.offset) { _, entry in
+            let groupName = entry.0
+            let groupItems = entry.1
+            let groupKey = "\(tier.rawValue)-\(groupName)"
+            let isExpanded = expandedGroups.contains(groupKey)
+            let groupIDs = Set(groupItems.map { $0.id })
+            let allSel = groupIDs.isSubset(of: selectedItems)
+            let someSel = !groupIDs.isDisjoint(with: selectedItems)
+            let groupSize = groupItems.reduce(0) { $0 + $1.size }
+
+            VStack(spacing: 0) {
+                Button(action: {
+                    withAnimation { expandedGroups.toggleMember(groupKey) }
+                }) {
+                    HStack(spacing: 8) {
+                        Button(action: {
+                            if allSel { selectedItems.subtract(groupIDs) }
+                            else { selectedItems.formUnion(groupIDs) }
+                        }) {
+                            Image(systemName: allSel ? "checkmark.square.fill" :
+                                                someSel ? "minus.square" : "square")
+                                .font(.system(size: 13))
+                                .foregroundColor(allSel ? .accentColor : .secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        Text(groupName).font(.callout).fontWeight(.medium)
+                        Spacer()
+                        Text(groupSize.formattedSize).font(.callout).foregroundColor(.secondary)
+                        Text("\(groupItems.count)").font(.caption).foregroundColor(.secondary)
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption2).foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+
+                if isExpanded {
+                    itemList(groupItems, tier: tier, prefix: groupName)
+                }
+
+                Divider().padding(.leading, 40)
+            }
+        }
+    }
+
+    // MARK: - Item List
+
+    @ViewBuilder
+    private func itemList(_ items: [CleanItem], tier: RiskLevel, prefix: String) -> some View {
         VStack(spacing: 0) {
             ForEach(items.prefix(maxPreview)) { item in
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Button(action: {
                         if selectedItems.contains(item.id) { selectedItems.remove(item.id) }
                         else { selectedItems.insert(item.id) }
                     }) {
                         Image(systemName: selectedItems.contains(item.id)
                               ? "checkmark.square.fill" : "square")
-                            .font(.system(size: 14))
+                            .font(.system(size: 12))
                             .foregroundColor(selectedItems.contains(item.id) ? .accentColor : .secondary)
                     }
                     .buttonStyle(.plain)
 
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(item.name)
-                            .font(.caption)
-                            .lineLimit(1).truncationMode(.middle)
-
-                        HStack(spacing: 6) {
+                        Text(item.name).font(.caption).lineLimit(1).truncationMode(.middle)
+                        HStack(spacing: 4) {
                             Text(item.fileType).font(.caption2).foregroundColor(.accentColor)
-                            if viewMode == .byCategory {
+                            if groupMode == .byCategory {
                                 Text("·").foregroundColor(.secondary)
                                 Text(item.appName).font(.caption2).foregroundColor(.secondary)
                             }
+                            if item.category == .orphan {
+                                Text("·").foregroundColor(.secondary)
+                                Text(RiskAssessor.orphanReason(for: item.path))
+                                    .font(.caption2).foregroundColor(.orange)
+                                    .lineLimit(1)
+                            }
                         }
                     }
-
                     Spacer()
-
-                    Text(item.size.formattedSize)
-                        .font(.caption).foregroundColor(.secondary)
+                    Text(item.size.formattedSize).font(.caption).foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 28)
-                .padding(.vertical, 4)
+                .padding(.horizontal, 28).padding(.vertical, 3)
                 .contextMenu {
                     Button(action: {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)])
-                    }) {
-                        Label("在访达中显示", systemImage: "folder")
-                    }
+                    }) { Label("在访达中显示", systemImage: "folder") }
                     Button(action: {
-                        let pasteboard = NSPasteboard.general
-                        pasteboard.clearContents()
-                        pasteboard.setString(item.path, forType: .string)
-                    }) {
-                        Label("拷贝路径", systemImage: "doc.on.doc")
-                    }
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(item.path, forType: .string)
+                    }) { Label("拷贝路径", systemImage: "doc.on.doc") }
                 }
             }
 
             if items.count > maxPreview {
                 Text("...还有 \(items.count - maxPreview) 个文件")
-                    .font(.caption).foregroundColor(.secondary)
-                    .padding(.vertical, 4)
+                    .font(.caption).foregroundColor(.secondary).padding(.vertical, 4)
             }
         }
-        .padding(.bottom, 8)
+        .padding(.bottom, 6)
     }
 
     // MARK: - Footer
@@ -346,16 +339,18 @@ struct ResultsView: View {
         VStack(spacing: 0) {
             Divider()
             HStack {
+                if selectedItems.count < allItems.count {
+                    Button("全选") { selectedItems = Set(allItems.map { $0.id }) }
+                        .font(.caption).padding(.leading, 16)
+                }
                 Spacer()
                 Button(action: { showConfirmClean = true }) {
                     HStack(spacing: 6) {
                         Image(systemName: "trash")
                         Text("清理所选 (\(selectedSize.formattedSize))")
-                    }
-                    .frame(minWidth: 200)
+                    }.frame(minWidth: 200)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(.borderedProminent).controlSize(.large)
                 .disabled(selectedItems.isEmpty || isCleaning)
                 .keyboardShortcut(.return, modifiers: [])
                 .padding(16)
@@ -368,45 +363,27 @@ struct ResultsView: View {
 
     private var confirmCleanSheet: some View {
         VStack(spacing: 20) {
-            Image(systemName: "trash.fill")
-                .font(.system(size: 48)).foregroundColor(.orange)
+            Image(systemName: "trash.fill").font(.system(size: 48)).foregroundColor(.orange)
             Text("确认清理？").font(.title2).fontWeight(.bold)
             VStack(spacing: 4) {
                 Text("将移动 \(selectedCount) 个文件到废纸篓")
-                Text("共释放 \(selectedSize.formattedSize) 空间")
-                    .foregroundColor(.orange).fontWeight(.medium)
-            }
-            .font(.body).multilineTextAlignment(.center)
-            Text("文件会先移入废纸篓，后悔了还能从废纸篓恢复。")
-                .font(.caption).foregroundColor(.secondary)
-
+                Text("共释放 \(selectedSize.formattedSize) 空间").foregroundColor(.orange).fontWeight(.medium)
+            }.font(.body).multilineTextAlignment(.center)
+            Text("文件会先移入废纸篓，后悔了还能恢复。").font(.caption).foregroundColor(.secondary)
             HStack(spacing: 16) {
                 Button("再想想") { showConfirmClean = false }
-                Button("清理！") {
-                    showConfirmClean = false
-                    performClean()
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.return, modifiers: [])
-            }
-            .padding(.top, 8)
-        }
-        .padding(40).frame(width: 400, height: 320)
+                Button("清理！") { showConfirmClean = false; performClean() }
+                    .buttonStyle(.borderedProminent).keyboardShortcut(.return, modifiers: [])
+            }.padding(.top, 8)
+        }.padding(40).frame(width: 400, height: 320)
     }
-
-    // MARK: - Clean
 
     private func performClean() {
         isCleaning = true
-        let items = summary.results.flatMap { $0.items }.filter { selectedItems.contains($0.id) }
-        let manager = CleanManager()
-
+        let items = allItems.filter { selectedItems.contains($0.id) }
         Task {
-            let result = await manager.clean(items: items)
-            await MainActor.run {
-                isCleaning = false
-                cleanResult = result
-            }
+            let result = await CleanManager().clean(items: items)
+            await MainActor.run { isCleaning = false; cleanResult = result }
         }
     }
 }
