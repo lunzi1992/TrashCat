@@ -9,7 +9,7 @@ final class CacheScanner: Scannable {
 
     private var scanPaths: [String] {
         let home = fileManager.homeDirectoryForCurrentUser.path
-        var paths = [
+        var paths: [String] = [
             "\(home)/Library/Caches",
             "/Library/Caches",
         ]
@@ -19,6 +19,17 @@ final class CacheScanner: Scannable {
         let tempDir = NSTemporaryDirectory()
         let userVarFolder = (tempDir as NSString).deletingLastPathComponent  // remove "T/"
         paths.append(userVarFolder)
+
+        // Developer tool caches (append if exist)
+        let devPaths = [
+            "\(home)/Library/Developer/Xcode/DerivedData",
+            "\(home)/Library/Developer/Xcode/iOS DeviceSupport",
+            "\(home)/Library/Developer/CoreSimulator/Devices",
+            "\(home)/Library/Developer/Xcode/Archives",
+            // iOS backups
+            "\(home)/Library/Application Support/MobileSync/Backup",
+        ]
+        paths.append(contentsOf: devPaths.filter { fileManager.fileExists(atPath: $0) })
 
         return paths
     }

@@ -5,13 +5,18 @@ final class TempScanner: Scannable {
     let progressLabel = "扫描临时文件..."
 
     private let fileManager = FileManager.default
-    private let maxItems = 5000
+    private let maxItems = 10000
 
-    private let scanPaths = [
-        "/tmp",
-        "/private/tmp",
-        "/private/var/tmp",
-    ]
+    private var scanPaths: [String] {
+        var paths = [
+            "/tmp",
+            "/private/tmp",
+            "/private/var/tmp",
+        ]
+        // Also add the user's T/ folder inside /private/var/folders
+        paths.append(NSTemporaryDirectory())
+        return paths
+    }
 
     func scan() async throws -> ScanResult {
         var items: [CleanItem] = []
@@ -31,7 +36,7 @@ final class TempScanner: Scannable {
         guard let enumerator = fileManager.enumerator(
             at: URL(fileURLWithPath: path),
             includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
-            options: [.skipsHiddenFiles],
+            options: [],  // Don't skip hidden — /tmp has dot-files
             errorHandler: { url, error in
                 print("[TrashCat] TempScanner error at \(url.path): \(error)")
                 return true
