@@ -54,6 +54,16 @@ struct CleanItem: Identifiable, Equatable {
     let name: String
     let size: Int64
     let category: CleanCategory
+
+    /// Which app this file likely belongs to (derived from path)
+    var appName: String {
+        FileCategorizer.appName(for: path, category: category)
+    }
+
+    /// What kind of file this is (缓存 / 日志 / 配置 / etc.)
+    var fileType: String {
+        FileCategorizer.fileType(for: path, name: name)
+    }
 }
 
 // MARK: - Scan Result

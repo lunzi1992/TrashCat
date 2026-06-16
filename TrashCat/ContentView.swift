@@ -17,7 +17,7 @@ struct ContentView: View {
                 errorView(message)
             }
         }
-        .frame(width: 520, height: 480)
+        .frame(minWidth: 560, minHeight: 500)
         .onAppear {
             coordinator.registerAll([
                 CacheScanner(),

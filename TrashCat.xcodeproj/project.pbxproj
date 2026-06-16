@@ -20,6 +20,7 @@
 		A10010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10010; };
 		A10011 /* CleanManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10011; };
 		A10012 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10012; };
+		A10018 /* FileCategorizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10018; };
 		A10013 /* PermissionGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10013; };
 		A10014 /* ScanningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10014; };
 		A10015 /* ResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10015; };
@@ -41,6 +42,7 @@
 		F10010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F10011 /* CleanManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanManager.swift; sourceTree = "<group>"; };
 		F10012 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
+		F10018 /* FileCategorizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileCategorizer.swift; sourceTree = "<group>"; };
 		F10013 /* PermissionGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionGuideView.swift; sourceTree = "<group>"; };
 		F10014 /* ScanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanningView.swift; sourceTree = "<group>"; };
 		F10015 /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
@@ -113,6 +115,7 @@
 			isa = PBXGroup;
 			children = (
 				F10012 /* PermissionManager.swift */,
+				F10018 /* FileCategorizer.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -211,6 +214,7 @@
 				A10017 /* BrowserCacheScanner.swift in Sources */,
 				A10011 /* CleanManager.swift in Sources */,
 				A10012 /* PermissionManager.swift in Sources */,
+				A10018 /* FileCategorizer.swift in Sources */,
 				A10013 /* PermissionGuideView.swift in Sources */,
 				A10014 /* ScanningView.swift in Sources */,
 				A10015 /* ResultsView.swift in Sources */,
