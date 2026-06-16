@@ -1,5 +1,85 @@
 import Foundation
 
+// MARK: - Browser Definition
+
+private struct BrowserDef {
+    let name: String
+    let applicationSupportPath: String   // relative to ~/Library/Application Support/
+    let cacheSubpaths: [String]          // relative to the appSupportPath
+}
+
+// MARK: - Browser Registry
+
+private let knownBrowsers: [String: BrowserDef] = [
+    // Chromium-based
+    "com.google.Chrome": BrowserDef(
+        name: "Chrome",
+        applicationSupportPath: "Google/Chrome",
+        cacheSubpaths: defaultChromiumCachePaths()),
+    "com.microsoft.edgemac": BrowserDef(
+        name: "Edge",
+        applicationSupportPath: "Microsoft Edge",
+        cacheSubpaths: defaultChromiumCachePaths()),
+    "com.brave.Browser": BrowserDef(
+        name: "Brave",
+        applicationSupportPath: "BraveSoftware/Brave-Browser",
+        cacheSubpaths: defaultChromiumCachePaths()),
+    "com.vivaldi.Vivaldi": BrowserDef(
+        name: "Vivaldi",
+        applicationSupportPath: "Vivaldi",
+        cacheSubpaths: defaultChromiumCachePaths()),
+    "com.operasoftware.Opera": BrowserDef(
+        name: "Opera",
+        applicationSupportPath: "com.operasoftware.Opera",
+        cacheSubpaths: ["Cache"]),  // Opera uses flat structure
+    "company.thebrowser.Browser": BrowserDef(
+        name: "Arc",
+        applicationSupportPath: "Arc",
+        cacheSubpaths: arcCachePaths()),
+
+    // Firefox (Gecko)
+    "org.mozilla.firefox": BrowserDef(
+        name: "Firefox",
+        applicationSupportPath: "Firefox",
+        cacheSubpaths: []),  // handled separately via Profiles/
+
+    // Safari (WebKit) — cache already covered by CacheScanner, but check WebKit dirs
+    "com.apple.Safari": BrowserDef(
+        name: "Safari",
+        applicationSupportPath: "",  // Safari uses Caches/ and WebKit/, not AppSupport
+        cacheSubpaths: []),
+]
+
+// MARK: - Cache Path Helpers
+
+private func defaultChromiumCachePaths() -> [String] {
+    var paths: [String] = []
+    // Default profile
+    paths.append("Default/Cache")
+    paths.append("Default/Code Cache")
+    paths.append("Default/Service Worker/CacheStorage")
+    paths.append("Default/Service Worker/ScriptCache")
+    // Additional profiles
+    for i in 1...5 {
+        paths.append("Profile \(i)/Cache")
+        paths.append("Profile \(i)/Code Cache")
+        paths.append("Profile \(i)/Service Worker/CacheStorage")
+    }
+    return paths
+}
+
+private func arcCachePaths() -> [String] {
+    var paths = defaultChromiumCachePaths()
+    // Arc-specific caches
+    paths.append("ArchiveItemsFaviconCache")
+    paths.append("ArchiveSnapshotCache")
+    paths.append("BoostsImageCache")
+    paths.append("SidebarItemsFaviconCache")
+    return paths
+}
+
+// MARK: - BrowserCacheScanner
+
 final class BrowserCacheScanner: Scannable {
     let category: CleanCategory = .browserCache
     let progressLabel = "翻浏览器的老鼠窝..."
@@ -7,66 +87,79 @@ final class BrowserCacheScanner: Scannable {
     private let fileManager = FileManager.default
     private let maxItems = 10000
 
-    /// Cache-only paths — deliberately excludes Bookmarks, Login Data, Cookies, Preferences
-    private var browserCachePaths: [String] {
-        let home = fileManager.homeDirectoryForCurrentUser.path
-        var paths: [String] = []
-
-        // Chrome
-        let chromeBase = "\(home)/Library/Application Support/Google/Chrome"
-        paths.append("\(chromeBase)/Default/Cache")
-        paths.append("\(chromeBase)/Default/Code Cache")
-        paths.append("\(chromeBase)/Default/Service Worker/CacheStorage")
-        paths.append("\(chromeBase)/Default/Service Worker/ScriptCache")
-        // Chrome profiles (Profile 1, Profile 2, ...)
-        for i in 1...5 {
-            paths.append("\(chromeBase)/Profile \(i)/Cache")
-            paths.append("\(chromeBase)/Profile \(i)/Code Cache")
-            paths.append("\(chromeBase)/Profile \(i)/Service Worker/CacheStorage")
-        }
-
-        // Edge
-        let edgeBase = "\(home)/Library/Application Support/Microsoft Edge"
-        paths.append("\(edgeBase)/Default/Cache")
-        paths.append("\(edgeBase)/Default/Code Cache")
-        paths.append("\(edgeBase)/Default/Service Worker/CacheStorage")
-
-        // Firefox
-        let firefoxBase = "\(home)/Library/Application Support/Firefox/Profiles"
-        if let profiles = try? fileManager.contentsOfDirectory(atPath: firefoxBase) {
-            for profile in profiles where profile.hasSuffix(".default-release") || profile.hasSuffix(".default") {
-                paths.append("\(firefoxBase)/\(profile)/cache2")
-            }
-        }
-
-        // Brave
-        let braveBase = "\(home)/Library/Application Support/BraveSoftware/Brave-Browser"
-        paths.append("\(braveBase)/Default/Cache")
-        paths.append("\(braveBase)/Default/Code Cache")
-
-        // Opera
-        let operaBase = "\(home)/Library/Application Support/com.operasoftware.Opera"
-        paths.append("\(operaBase)/Cache")
-
-        // Safari WebKit caches (separate from main cache)
-        paths.append("\(home)/Library/WebKit/com.apple.Safari")
-
-        return paths.filter { fileManager.fileExists(atPath: $0) }
-    }
-
     func scan() async throws -> ScanResult {
+        let home = fileManager.homeDirectoryForCurrentUser.path
+        let installedBrowsers = await discoverInstalledBrowsers()
         var items: [CleanItem] = []
 
-        for path in browserCachePaths {
-            let scannedItems = await scanRecursive(at: path)
-            items.append(contentsOf: scannedItems)
+        for (bundleId, def) in installedBrowsers {
+            let appSupportBase = "\(home)/Library/Application Support/\(def.applicationSupportPath)"
+
+            for subpath in def.cacheSubpaths {
+                let fullPath = "\(appSupportBase)/\(subpath)"
+                guard fileManager.fileExists(atPath: fullPath) else { continue }
+
+                let scannedItems = await scanRecursive(at: fullPath, browser: def.name)
+                items.append(contentsOf: scannedItems)
+                if items.count >= maxItems { break }
+            }
+
+            // Firefox: scan Profiles/*/cache2
+            if bundleId == "org.mozilla.firefox" {
+                let profilesDir = "\(appSupportBase)/Profiles"
+                if let profiles = try? fileManager.contentsOfDirectory(atPath: profilesDir) {
+                    for profile in profiles where profile.contains(".default") {
+                        let cachePath = "\(profilesDir)/\(profile)/cache2"
+                        if fileManager.fileExists(atPath: cachePath) {
+                            let scanned = await scanRecursive(at: cachePath, browser: "Firefox")
+                            items.append(contentsOf: scanned)
+                        }
+                    }
+                }
+            }
+
             if items.count >= maxItems { break }
+        }
+
+        // Safari WebKit cache (not in Application Support, not in regular Caches)
+        let safariWebKit = "\(home)/Library/WebKit/com.apple.Safari"
+        if fileManager.fileExists(atPath: safariWebKit) {
+            let scanned = await scanRecursive(at: safariWebKit, browser: "Safari")
+            items.append(contentsOf: scanned)
         }
 
         return ScanResult(category: .browserCache, items: items)
     }
 
-    private func scanRecursive(at path: String) async -> [CleanItem] {
+    // MARK: - Browser Discovery
+
+    private func discoverInstalledBrowsers() async -> [(bundleId: String, def: BrowserDef)] {
+        var results: [(String, BrowserDef)] = []
+        let appDirs = ["/Applications", "\(fileManager.homeDirectoryForCurrentUser.path)/Applications"]
+
+        for appDir in appDirs {
+            guard let contents = try? fileManager.contentsOfDirectory(
+                at: URL(fileURLWithPath: appDir),
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+            ) else { continue }
+
+            for url in contents where url.pathExtension == "app" {
+                guard let bundle = Bundle(url: url),
+                      let bundleId = bundle.bundleIdentifier else { continue }
+
+                if let def = knownBrowsers[bundleId] {
+                    results.append((bundleId, def))
+                }
+            }
+        }
+
+        return results
+    }
+
+    // MARK: - Recursive Scan
+
+    private func scanRecursive(at path: String, browser: String) async -> [CleanItem] {
         var items: [CleanItem] = []
 
         guard let enumerator = fileManager.enumerator(
@@ -74,12 +167,10 @@ final class BrowserCacheScanner: Scannable {
             includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
             options: [.skipsHiddenFiles],
             errorHandler: { url, error in
-                print("[TrashCat] BrowserCache error at \(url.path): \(error)")
+                print("[TrashCat] BrowserCache(\(browser)) error at \(url.path): \(error)")
                 return true
             }
-        ) else {
-            return items
-        }
+        ) else { return items }
 
         for case let url as URL in enumerator {
             guard items.count < maxItems else { break }
@@ -88,11 +179,9 @@ final class BrowserCacheScanner: Scannable {
                   let isDir = resourceValues.isDirectory,
                   !isDir,
                   let fileSize = resourceValues.fileSize,
-                  fileSize > 0 else {
-                continue
-            }
+                  fileSize > 0 else { continue }
 
-            let relative = url.path.replacingOccurrences(of: path + "/", with: "")
+            let relative = "[\(browser)] " + url.path.replacingOccurrences(of: path + "/", with: "")
             items.append(CleanItem(
                 path: url.path,
                 name: relative,
