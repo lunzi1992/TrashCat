@@ -51,6 +51,22 @@ struct ResultsView: View {
 
     private var selectedCount: Int { selectedItems.count }
 
+    /// Risk breakdown of currently selected items
+    private var selectedByRisk: [(RiskLevel, Int)] {
+        let selected = allItems.filter { selectedItems.contains($0.id) }
+        let map = Dictionary(grouping: selected, by: { $0.riskLevel })
+        let levels: [RiskLevel] = [.safe, .caution, .danger]
+        return levels.compactMap { (level: RiskLevel) -> (RiskLevel, Int)? in
+            let count = map[level]?.count ?? 0
+            return count > 0 ? (level, count) : nil
+        }
+    }
+
+    /// All safe items (minus trash — trash is always separate)
+    private var safeNonTrashIDs: Set<UUID> {
+        Set(allItems.filter { $0.riskLevel == .safe && $0.category != .trash }.map { $0.id })
+    }
+
     var body: some View {
         if let result = cleanResult {
             CleanReportView(result: result) { coordinator.state = .idle }
@@ -339,8 +355,14 @@ struct ResultsView: View {
         VStack(spacing: 0) {
             Divider()
             HStack {
-                if selectedItems.count < allItems.count {
-                    Button("全选") { selectedItems = Set(allItems.map { $0.id }) }
+                if selectedItems != safeNonTrashIDs {
+                    Button("选择推荐项") { selectedItems = safeNonTrashIDs }
+                        .font(.caption).padding(.leading, 16)
+                } else if selectedItems.isEmpty {
+                    // nothing selected
+                    EmptyView()
+                } else {
+                    Button("取消全选") { selectedItems = [] }
                         .font(.caption).padding(.leading, 16)
                 }
                 Spacer()
@@ -362,20 +384,46 @@ struct ResultsView: View {
     // MARK: - Confirm Sheet
 
     private var confirmCleanSheet: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "trash.fill").font(.system(size: 48)).foregroundColor(.orange)
+        VStack(spacing: 16) {
+            Image(systemName: "trash.fill").font(.system(size: 40)).foregroundColor(.orange)
             Text("确认清理？").font(.title2).fontWeight(.bold)
-            VStack(spacing: 4) {
+
+            VStack(spacing: 2) {
                 Text("将移动 \(selectedCount) 个文件到废纸篓")
-                Text("共释放 \(selectedSize.formattedSize) 空间").foregroundColor(.orange).fontWeight(.medium)
+                Text("共释放 \(selectedSize.formattedSize) 空间")
+                    .foregroundColor(.orange).fontWeight(.medium)
             }.font(.body).multilineTextAlignment(.center)
-            Text("文件会先移入废纸篓，后悔了还能恢复。").font(.caption).foregroundColor(.secondary)
+
+            // Risk breakdown
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(selectedByRisk, id: \.0.rawValue) { level, count in
+                    HStack(spacing: 6) {
+                        Circle().fill(level.tint).frame(width: 8, height: 8)
+                        Text(level.displayName).font(.caption).fontWeight(.medium)
+                        Spacer()
+                        Text("\(count) 项").font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
+
+            VStack(spacing: 2) {
+                if selectedByRisk.contains(where: { $0.0 == .danger }) {
+                    Text("⚠️ 选中的文件包含谨慎处理项，请确认后继续。")
+                        .font(.caption).foregroundColor(.red)
+                }
+                Text("文件会先移入废纸篓，后悔了还能恢复。")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+
             HStack(spacing: 16) {
                 Button("再想想") { showConfirmClean = false }
                 Button("清理！") { showConfirmClean = false; performClean() }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.return, modifiers: [])
-            }.padding(.top, 8)
-        }.padding(40).frame(width: 400, height: 320)
+            }.padding(.top, 4)
+        }.padding(32).frame(width: 380)
     }
 
     private func performClean() {
@@ -384,6 +432,16 @@ struct ResultsView: View {
         Task {
             let result = await CleanManager().clean(items: items)
             await MainActor.run { isCleaning = false; cleanResult = result }
+        }
+    }
+}
+
+extension RiskLevel {
+    var tint: Color {
+        switch self {
+        case .safe:    return .green
+        case .caution: return .orange
+        case .danger:  return .red
         }
     }
 }

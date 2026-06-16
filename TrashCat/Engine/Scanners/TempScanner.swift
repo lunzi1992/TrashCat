@@ -35,7 +35,7 @@ final class TempScanner: Scannable {
 
         guard let enumerator = fileManager.enumerator(
             at: URL(fileURLWithPath: path),
-            includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
+            includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey],
             options: [],  // Don't skip hidden — /tmp has dot-files
             errorHandler: { url, error in
                 print("[TrashCat] TempScanner error at \(url.path): \(error)")
@@ -48,12 +48,18 @@ final class TempScanner: Scannable {
         for case let url as URL in enumerator {
             guard items.count < maxItems else { break }
 
-            guard let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey]),
+            guard let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey]),
                   let isDir = resourceValues.isDirectory,
                   !isDir,
                   let fileSize = resourceValues.fileSize,
                   fileSize > 0 else {
                 continue
+            }
+
+            // Age filter: only include files ≥ N days old
+            if let modDate = resourceValues.contentModificationDate {
+                let age = Calendar.current.dateComponents([.day], from: modDate, to: Date()).day ?? 0
+                if age < ScanPolicy.tempMinAgeDays { continue }
             }
 
             let relative = url.path.replacingOccurrences(of: path + "/", with: "")
