@@ -16,6 +16,7 @@
 		A10007 /* TempScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10007; };
 		A10008 /* TrashScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10008; };
 		A10009 /* OrphanScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10009; };
+		A10017 /* BrowserCacheScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10017; };
 		A10010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10010; };
 		A10011 /* CleanManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10011; };
 		A10012 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10012; };
@@ -36,6 +37,7 @@
 		F10007 /* TempScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempScanner.swift; sourceTree = "<group>"; };
 		F10008 /* TrashScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashScanner.swift; sourceTree = "<group>"; };
 		F10009 /* OrphanScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrphanScanner.swift; sourceTree = "<group>"; };
+		F10017 /* BrowserCacheScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserCacheScanner.swift; sourceTree = "<group>"; };
 		F10010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F10011 /* CleanManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanManager.swift; sourceTree = "<group>"; };
 		F10012 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
@@ -119,6 +121,7 @@
 			isa = PBXGroup;
 			children = (
 				F10005 /* CacheScanner.swift */,
+				F10017 /* BrowserCacheScanner.swift */,
 				F10006 /* LogScanner.swift */,
 				F10007 /* TempScanner.swift */,
 				F10008 /* TrashScanner.swift */,
@@ -205,6 +208,7 @@
 				A10007 /* TempScanner.swift in Sources */,
 				A10008 /* TrashScanner.swift in Sources */,
 				A10009 /* OrphanScanner.swift in Sources */,
+				A10017 /* BrowserCacheScanner.swift in Sources */,
 				A10011 /* CleanManager.swift in Sources */,
 				A10012 /* PermissionManager.swift in Sources */,
 				A10013 /* PermissionGuideView.swift in Sources */,

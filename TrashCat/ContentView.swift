@@ -21,6 +21,7 @@ struct ContentView: View {
         .onAppear {
             coordinator.registerAll([
                 CacheScanner(),
+                BrowserCacheScanner(),
                 LogScanner(),
                 TempScanner(),
                 TrashScanner(),

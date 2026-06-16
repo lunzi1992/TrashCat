@@ -9,10 +9,18 @@ final class CacheScanner: Scannable {
 
     private var scanPaths: [String] {
         let home = fileManager.homeDirectoryForCurrentUser.path
-        return [
+        var paths = [
             "\(home)/Library/Caches",
             "/Library/Caches",
         ]
+
+        // System per-user temp/cache directory (a.k.a. /private/var/folders/xx/yyyyy/)
+        // NSTemporaryDirectory() returns .../T/ — go up one level to get C/ + T/
+        let tempDir = NSTemporaryDirectory()
+        let userVarFolder = (tempDir as NSString).deletingLastPathComponent  // remove "T/"
+        paths.append(userVarFolder)
+
+        return paths
     }
 
     func scan() async throws -> ScanResult {
