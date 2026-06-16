@@ -5,8 +5,8 @@ final class CacheScanner: Scannable {
     let progressLabel = "扫描缓存文件..."
 
     private let fileManager = FileManager.default
+    private let maxItems = 10000  // Safety limit
 
-    // Directories to scan for caches
     private var scanPaths: [String] {
         let home = fileManager.homeDirectoryForCurrentUser.path
         return [
@@ -19,37 +19,50 @@ final class CacheScanner: Scannable {
         var items: [CleanItem] = []
 
         for path in scanPaths {
-            let scannedItems = await scanDirectory(at: path)
+            let scannedItems = await scanRecursive(at: path)
             items.append(contentsOf: scannedItems)
+            if items.count >= maxItems { break }
         }
 
         return ScanResult(category: .cache, items: items)
     }
 
-    private func scanDirectory(at path: String) async -> [CleanItem] {
+    /// Recursively enumerate all files under path, adding each file's size.
+    /// Uses FileManager.enumerator which performs a depth-first walk.
+    private func scanRecursive(at path: String) async -> [CleanItem] {
         var items: [CleanItem] = []
 
-        guard let contents = try? fileManager.contentsOfDirectory(
+        guard let enumerator = fileManager.enumerator(
             at: URL(fileURLWithPath: path),
             includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
-            options: [.skipsHiddenFiles]
+            options: [.skipsHiddenFiles],
+            errorHandler: { url, error in
+                print("[TrashCat] Enumerator error at \(url.path): \(error)")
+                return true  // continue on error
+            }
         ) else {
+            print("[TrashCat] CacheScanner: cannot access \(path)")
             return items
         }
 
-        for url in contents {
+        for case let url as URL in enumerator {
+            guard items.count < maxItems else { break }
+
             guard let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey]),
-                  let fileSize = resourceValues.fileSize else {
+                  let isDir = resourceValues.isDirectory,
+                  !isDir,  // skip directories themselves, only count files
+                  let fileSize = resourceValues.fileSize,
+                  fileSize > 0 else {
                 continue
             }
 
-            let item = CleanItem(
+            let relative = url.path.replacingOccurrences(of: path + "/", with: "")
+            items.append(CleanItem(
                 path: url.path,
-                name: url.lastPathComponent,
+                name: relative,
                 size: Int64(fileSize),
                 category: .cache
-            )
-            items.append(item)
+            ))
         }
 
         return items
