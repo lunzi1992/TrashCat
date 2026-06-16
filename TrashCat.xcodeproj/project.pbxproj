@@ -19,6 +19,10 @@
 		A10010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10010; };
 		A10011 /* CleanManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10011; };
 		A10012 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10012; };
+		A10013 /* PermissionGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10013; };
+		A10014 /* ScanningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10014; };
+		A10015 /* ResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10015; };
+		A10016 /* CleanReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10016; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +39,10 @@
 		F10010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F10011 /* CleanManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanManager.swift; sourceTree = "<group>"; };
 		F10012 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
+		F10013 /* PermissionGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionGuideView.swift; sourceTree = "<group>"; };
+		F10014 /* ScanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanningView.swift; sourceTree = "<group>"; };
+		F10015 /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
+		F10016 /* CleanReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanReportView.swift; sourceTree = "<group>"; };
 		F10020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -91,6 +99,10 @@
 		G10005 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				F10013 /* PermissionGuideView.swift */,
+				F10014 /* ScanningView.swift */,
+				F10015 /* ResultsView.swift */,
+				F10016 /* CleanReportView.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -195,6 +207,10 @@
 				A10009 /* OrphanScanner.swift in Sources */,
 				A10011 /* CleanManager.swift in Sources */,
 				A10012 /* PermissionManager.swift in Sources */,
+				A10013 /* PermissionGuideView.swift in Sources */,
+				A10014 /* ScanningView.swift in Sources */,
+				A10015 /* ResultsView.swift in Sources */,
+				A10016 /* CleanReportView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

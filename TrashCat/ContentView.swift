@@ -1,11 +1,44 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var isScanning = false
-    @State private var scanComplete = false
+    @StateObject private var coordinator = ScanCoordinator()
+    @State private var showPermissionGuide = false
 
     var body: some View {
+        Group {
+            switch coordinator.state {
+            case .idle:
+                idleView
+            case .scanning(let category, let progress):
+                ScanningView(category: category, progress: progress)
+            case .completed(let summary):
+                ResultsView(summary: summary, coordinator: coordinator)
+            case .error(let message):
+                errorView(message)
+            }
+        }
+        .frame(width: 520, height: 480)
+        .onAppear {
+            coordinator.registerAll([
+                CacheScanner(),
+                LogScanner(),
+                TempScanner(),
+                TrashScanner(),
+                OrphanScanner(),
+            ])
+            showPermissionGuide = !PermissionManager.shared.hasFullDiskAccess
+        }
+        .sheet(isPresented: $showPermissionGuide) {
+            PermissionGuideView(isPresented: $showPermissionGuide)
+        }
+    }
+
+    // MARK: - Idle View
+
+    private var idleView: some View {
         VStack(spacing: 24) {
+            Spacer()
+
             // Logo
             Image("AppIcon")
                 .resizable()
@@ -20,13 +53,14 @@ struct ContentView: View {
             Text("垃圾就像老鼠。我是那只抓老鼠的猫。")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
 
             Spacer().frame(height: 8)
 
             // Scan Button
             Button(action: {
-                startScan()
+                Task {
+                    await coordinator.startScan()
+                }
             }) {
                 VStack(spacing: 8) {
                     Image(systemName: "magnifyingglass.circle.fill")
@@ -37,7 +71,7 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                .frame(width: 200, height: 120)
+                .frame(width: 220, height: 120)
             }
             .buttonStyle(.plain)
             .background(
@@ -48,30 +82,36 @@ struct ContentView: View {
                             .stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
                     )
             )
-            .disabled(isScanning)
-
-            if isScanning {
-                ProgressView("正在嗅探...")
-                    .padding(.top, 16)
-            }
+            .keyboardShortcut(.return, modifiers: [])
 
             Spacer()
         }
         .padding(40)
-        .frame(width: 480, height: 400)
     }
 
-    private func startScan() {
-        isScanning = true
-        // TODO: Trigger ScanCoordinator
-        // Simulate scanning for now
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            isScanning = false
-            scanComplete = true
+    // MARK: - Error View
+
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 40))
+                .foregroundColor(.orange)
+
+            Text("出问题了")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text(message)
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 300)
+
+            Button("重试") {
+                coordinator.state = .idle
+            }
+            .keyboardShortcut(.return, modifiers: [])
         }
+        .padding(40)
     }
-}
-
-#Preview {
-    ContentView()
 }
