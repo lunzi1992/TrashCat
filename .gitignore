@@ -1,0 +1,24 @@
+# Xcode
+*.xcuserdata
+*.xcworkspace/xcuserdata
+DerivedData/
+build/
+*.xcarchive
+*.xcbkptlist
+
+# Swift
+Packages/
+.build/
+*.swiftpm/
+
+# macOS
+.DS_Store
+Thumbs.db
+*.dmg
+
+# IDE
+.idea/
+.vscode/
+
+# Project
+.workbuddy/
