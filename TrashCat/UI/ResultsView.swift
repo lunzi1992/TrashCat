@@ -10,6 +10,7 @@ private extension Set {
 private enum GroupMode: String, CaseIterable {
     case byApp = "按应用"
     case byCategory = "按类型"
+    case byRule = "按规则"
 }
 
 struct ResultsView: View {
@@ -239,12 +240,29 @@ struct ResultsView: View {
 
     // MARK: - Grouped Content
 
+    // MARK: - Grouping
+
+    private func groupItems(_ items: [CleanItem]) -> [(String, [CleanItem])] {
+        let dict: [String: [CleanItem]]
+        switch groupMode {
+        case .byApp:
+            dict = Dictionary(grouping: items, by: { $0.appName })
+        case .byCategory:
+            dict = Dictionary(grouping: items, by: { $0.category.displayName })
+        case .byRule:
+            dict = Dictionary(grouping: items, by: { item in
+                if let rid = item.ruleId, let rule = RuleRegistry.all.first(where: { $0.id == rid }) {
+                    return "\(item.category.displayName) → \(rule.title)"
+                }
+                return item.category.displayName
+            })
+        }
+        return dict.map { ($0.key, $0.value) }.sorted { $0.0 < $1.0 }
+    }
+
     @ViewBuilder
     private func groupedContent(items: [CleanItem], tier: RiskLevel) -> some View {
-        let dict = groupMode == .byApp
-            ? Dictionary(grouping: items, by: { $0.appName })
-            : Dictionary(grouping: items, by: { $0.category.displayName })
-        let groups = dict.map { ($0.key, $0.value) }.sorted { $0.0 < $1.0 }
+        let groups = groupItems(items)
 
         ForEach(Array(groups.enumerated()), id: \.offset) { _, entry in
             let groupName = entry.0

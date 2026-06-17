@@ -23,6 +23,8 @@
 		A10018 /* FileCategorizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10018; };
 		A10019 /* RiskAssessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10019; };
 		A10020 /* ScanPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10021; };
+		A10021 /* RuleRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10022; };
+		A10022 /* RuleScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10023; };
 		A10013 /* PermissionGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10013; };
 		A10014 /* ScanningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10014; };
 		A10015 /* ResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10015; };
@@ -47,6 +49,8 @@
 		F10018 /* FileCategorizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileCategorizer.swift; sourceTree = "<group>"; };
 		F10019 /* RiskAssessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiskAssessor.swift; sourceTree = "<group>"; };
 		F10021 /* ScanPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanPolicy.swift; sourceTree = "<group>"; };
+		F10022 /* RuleRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleRegistry.swift; sourceTree = "<group>"; };
+		F10023 /* RuleScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleScanner.swift; sourceTree = "<group>"; };
 		F10013 /* PermissionGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionGuideView.swift; sourceTree = "<group>"; };
 		F10014 /* ScanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanningView.swift; sourceTree = "<group>"; };
 		F10015 /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
@@ -90,6 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				F10003 /* ScanModels.swift */,
+				F10022 /* RuleRegistry.swift */,
 			);
 			path = Model;
 			sourceTree = "<group>";
@@ -135,6 +140,7 @@
 				F10007 /* TempScanner.swift */,
 				F10008 /* TrashScanner.swift */,
 				F10009 /* OrphanScanner.swift */,
+				F10023 /* RuleScanner.swift */,
 			);
 			path = Scanners;
 			sourceTree = "<group>";
@@ -223,6 +229,8 @@
 				A10018 /* FileCategorizer.swift in Sources */,
 				A10019 /* RiskAssessor.swift in Sources */,
 				A10020 /* ScanPolicy.swift in Sources */,
+				A10021 /* RuleRegistry.swift in Sources */,
+				A10022 /* RuleScanner.swift in Sources */,
 				A10013 /* PermissionGuideView.swift in Sources */,
 				A10014 /* ScanningView.swift in Sources */,
 				A10015 /* ResultsView.swift in Sources */,

@@ -19,14 +19,15 @@ struct ContentView: View {
         }
         .frame(minWidth: 560, minHeight: 500)
         .onAppear {
-            coordinator.registerAll([
-                CacheScanner(),
-                BrowserCacheScanner(),
-                LogScanner(),
-                TempScanner(),
-                TrashScanner(),
-                OrphanScanner(),
-            ])
+            // Register rule-based scanners for all path-defined rules
+            let ruleScanners: [Scannable] = RuleRegistry.all
+                .filter { !$0.paths.isEmpty }
+                .map { RuleScanner(rule: $0) }
+            coordinator.registerAll(ruleScanners)
+
+            // Special scanners (dynamic paths — browser cache, orphan detection)
+            coordinator.register(BrowserCacheScanner())
+            coordinator.register(OrphanScanner())
             showPermissionGuide = !PermissionManager.shared.hasFullDiskAccess
         }
         .sheet(isPresented: $showPermissionGuide) {

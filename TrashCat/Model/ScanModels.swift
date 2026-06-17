@@ -111,6 +111,7 @@ struct CleanItem: Identifiable, Equatable {
     let name: String
     let size: Int64
     let category: CleanCategory
+    var ruleId: String? = nil
 
     /// Which app this file likely belongs to (derived from path)
     var appName: String {
@@ -138,6 +139,7 @@ struct CleanItem: Identifiable, Equatable {
 struct ScanResult: Equatable {
     let category: CleanCategory
     let items: [CleanItem]
+    var ruleId: String? = nil
 
     var totalSize: Int64 {
         items.reduce(0) { $0 + $1.size }
@@ -145,6 +147,12 @@ struct ScanResult: Equatable {
 
     var fileCount: Int {
         items.count
+    }
+
+    /// Human-readable rule title, looked up from the registry
+    var ruleTitle: String? {
+        guard let id = ruleId else { return nil }
+        return RuleRegistry.all.first { $0.id == id }?.title
     }
 }
 
@@ -178,6 +186,38 @@ struct CleanResult {
     var isSuccess: Bool {
         errors.isEmpty
     }
+}
+
+// MARK: - Deletion Strategy
+
+enum DeletionUnit: String {
+    case perFile         = "逐文件"
+    case perDirectory    = "按目录"
+    case perApp          = "按应用"
+}
+
+enum DeleteStrategy: String {
+    case trashItem       = "移入废纸篓"
+    case officialTool    = "使用官方工具"
+    case manualOnly      = "仅手动清理"
+}
+
+// MARK: - Clean Rule
+
+struct CleanRule: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let description: String
+    let paths: [String]
+    let category: CleanCategory
+    let riskLevel: RiskLevel
+    let defaultSelected: Bool
+    let deletionUnit: DeletionUnit
+    let minAgeDays: Int?
+    let deleteStrategy: DeleteStrategy
+    let impactSummary: String
+
+    static func == (lhs: CleanRule, rhs: CleanRule) -> Bool { lhs.id == rhs.id }
 }
 
 // MARK: - Formatting Helpers
