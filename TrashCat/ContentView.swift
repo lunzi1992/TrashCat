@@ -17,7 +17,7 @@ struct ContentView: View {
                 errorView(message)
             }
         }
-        .frame(minWidth: 560, minHeight: 500)
+        .frame(minWidth: 500, idealWidth: 540, minHeight: 420, idealHeight: 460)
         .onAppear {
             // Register rule-based scanners for all path-defined rules
             let ruleScanners: [Scannable] = RuleRegistry.all

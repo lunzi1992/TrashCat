@@ -23,49 +23,89 @@ struct ResultsView: View {
     @State private var expandedTiers: Set<String> = []
     @State private var expandedGroups: Set<String> = []
     @State private var selectedItems: Set<UUID> = []
+    @State private var selectedSize: Int64 = 0
+    @State private var selectedCount: Int = 0
     @State private var groupMode: GroupMode = .byApp
 
     private let maxPreview = 20
 
-    // MARK: - Derived
+    // Cache — computed once on init
+    private let allItems: [CleanItem]
+    private let tieredGroups: [(RiskLevel, [CleanItem])]
+    private let sizeOf: [UUID: Int64]     // O(1) size lookup
 
-    private var allItems: [CleanItem] { summary.results.flatMap { $0.items } }
+    init(summary: ScanSummary, coordinator: ScanCoordinator) {
+        self.summary = summary
+        self.coordinator = coordinator
+        let items = summary.results.flatMap { $0.items }
+        self.allItems = items
 
-    private var tieredGroups: [(RiskLevel, [CleanItem])] {
+        // Pre-build tier groups
         var map: [RiskLevel: [CleanItem]] = [:]
-        for item in allItems {
-            map[item.riskLevel, default: []].append(item)
-        }
-        let trashItems = allItems.filter { $0.category == .trash }
-        var groups: [(RiskLevel, [CleanItem])] = []
+        for item in items { map[item.riskLevel, default: []].append(item) }
+        let trashItems = items.filter { $0.category == .trash }
+        var tiers: [(RiskLevel, [CleanItem])] = []
         for level: RiskLevel in [.safe, .caution, .danger] {
-            let items = (map[level] ?? []).filter { $0.category != .trash }
-            if !items.isEmpty { groups.append((level, items)) }
+            let its = (map[level] ?? []).filter { $0.category != .trash }
+            if !its.isEmpty { tiers.append((level, its)) }
         }
-        if !trashItems.isEmpty { groups.append((.safe, trashItems)) }
-        return groups
-    }
+        if !trashItems.isEmpty { tiers.append((.safe, trashItems)) }
+        self.tieredGroups = tiers
 
-    private var selectedSize: Int64 {
-        allItems.filter { selectedItems.contains($0.id) }.reduce(0) { $0 + $1.size }
+        // Size lookup
+        var sizeDict: [UUID: Int64] = [:]
+        for item in items { sizeDict[item.id] = item.size }
+        self.sizeOf = sizeDict
     }
-
-    private var selectedCount: Int { selectedItems.count }
 
     /// Risk breakdown of currently selected items
     private var selectedByRisk: [(RiskLevel, Int)] {
-        let selected = allItems.filter { selectedItems.contains($0.id) }
-        let map = Dictionary(grouping: selected, by: { $0.riskLevel })
+        var map: [RiskLevel: Int] = [:]
+        for item in allItems where selectedItems.contains(item.id) {
+            map[item.riskLevel, default: 0] += 1
+        }
         let levels: [RiskLevel] = [.safe, .caution, .danger]
-        return levels.compactMap { (level: RiskLevel) -> (RiskLevel, Int)? in
-            let count = map[level]?.count ?? 0
+        return levels.compactMap { level in
+            let count = map[level] ?? 0
             return count > 0 ? (level, count) : nil
         }
     }
 
-    /// All safe items (minus trash — trash is always separate)
+    /// All safe items (minus trash)
     private var safeNonTrashIDs: Set<UUID> {
         Set(allItems.filter { $0.riskLevel == .safe && $0.category != .trash }.map { $0.id })
+    }
+
+    // MARK: - Incremental Selection Helpers
+
+    private func selectAllIDs(_ ids: Set<UUID>) {
+        let toAdd = ids.subtracting(selectedItems)
+        selectedItems.formUnion(ids)
+        for id in toAdd {
+            selectedSize += sizeOf[id] ?? 0
+            selectedCount += 1
+        }
+    }
+
+    private func deselectIDs(_ ids: Set<UUID>) {
+        let toRemove = ids.intersection(selectedItems)
+        selectedItems.subtract(ids)
+        for id in toRemove {
+            selectedSize -= sizeOf[id] ?? 0
+            selectedCount -= 1
+        }
+    }
+
+    private func toggleItem(_ id: UUID) {
+        if selectedItems.contains(id) {
+            selectedItems.remove(id)
+            selectedSize -= sizeOf[id] ?? 0
+            selectedCount -= 1
+        } else {
+            selectedItems.insert(id)
+            selectedSize += sizeOf[id] ?? 0
+            selectedCount += 1
+        }
     }
 
     var body: some View {
@@ -74,8 +114,8 @@ struct ResultsView: View {
         } else {
             mainResultsView
                 .onAppear {
-                    // Default-select only safe items
-                    selectedItems = Set(allItems.filter { $0.defaultSelected }.map { $0.id })
+                    let defaults = Set(allItems.filter { $0.defaultSelected }.map { $0.id })
+                    selectAllIDs(defaults)
                 }
         }
     }
@@ -177,13 +217,13 @@ struct ResultsView: View {
         return VStack(spacing: 0) {
             // Tier header
             Button(action: {
-                withAnimation { expandedTiers.toggleMember(tierKey) }
+                expandedTiers.toggleMember(tierKey)
             }) {
                 HStack(spacing: 10) {
                     // Checkbox
                     Button(action: {
-                        if allSelected { selectedItems.subtract(tierIDs) }
-                        else { selectedItems.formUnion(tierIDs) }
+                        if allSelected { deselectIDs(tierIDs) }
+                        else { selectAllIDs(tierIDs) }
                     }) {
                         Image(systemName: allSelected ? "checkmark.square.fill" :
                                             someSelected ? "minus.square" : "square")
@@ -276,12 +316,12 @@ struct ResultsView: View {
 
             VStack(spacing: 0) {
                 Button(action: {
-                    withAnimation { expandedGroups.toggleMember(groupKey) }
+                    expandedGroups.toggleMember(groupKey)
                 }) {
                     HStack(spacing: 8) {
                         Button(action: {
-                            if allSel { selectedItems.subtract(groupIDs) }
-                            else { selectedItems.formUnion(groupIDs) }
+                            if allSel { deselectIDs(groupIDs) }
+                            else { selectAllIDs(groupIDs) }
                         }) {
                             Image(systemName: allSel ? "checkmark.square.fill" :
                                                 someSel ? "minus.square" : "square")
@@ -318,8 +358,7 @@ struct ResultsView: View {
             ForEach(items.prefix(maxPreview)) { item in
                 HStack(spacing: 6) {
                     Button(action: {
-                        if selectedItems.contains(item.id) { selectedItems.remove(item.id) }
-                        else { selectedItems.insert(item.id) }
+                        toggleItem(item.id)
                     }) {
                         Image(systemName: selectedItems.contains(item.id)
                               ? "checkmark.square.fill" : "square")
@@ -374,13 +413,16 @@ struct ResultsView: View {
             Divider()
             HStack {
                 if selectedItems != safeNonTrashIDs {
-                    Button("选择推荐项") { selectedItems = safeNonTrashIDs }
+                    Button("选择推荐项") {
+                        deselectIDs(selectedItems)
+                        selectAllIDs(safeNonTrashIDs)
+                    }
                         .font(.caption).padding(.leading, 16)
                 } else if selectedItems.isEmpty {
                     // nothing selected
                     EmptyView()
                 } else {
-                    Button("取消全选") { selectedItems = [] }
+                    Button("取消全选") { deselectIDs(selectedItems) }
                         .font(.caption).padding(.leading, 16)
                 }
                 Spacer()
