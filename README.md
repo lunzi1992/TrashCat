@@ -58,17 +58,21 @@
 - [x] **安全缓存**——`~/Library/Caches` 中明确可重建的缓存
 - [x] **可能的应用残留**——已经「卸载」但可能还在的配置和容器，默认不自动清理
 - [x] **日志文件**——各种 `.log`，全是老鼠脚印
-- [x] **临时文件**——`/tmp` 里的过期临时文件
+- [x] **临时文件**——`/tmp` 里的过期临时文件（≥7 天）
 - [x] **废纸篓残留**——你以为清干净了？再闻闻
-- [x] 风险分层——按推荐清理、需要确认、谨慎处理分组
-- [x] 安全清理——默认只选择低风险项目
-- [x] 安全保险——叼进废纸篓而非直接咬死，后悔了还能捡回来
+- [x] **浏览器缓存**——动态发现已安装浏览器，只清缓存不动书签密码
+- [x] **开发者缓存**——Xcode、npm、Gradle、Cargo、VS Code
+- [x] **风险分层**——按推荐清理、需要确认、谨慎处理分组，默认只选安全项
+- [x] **规则引擎**——28 条 CleanRule，每条标注来源/风险/影响/删除策略
+- [x] **并发扫描**——TaskGroup 并行，速度提升 2-3x
+- [x] **安全保险**——叼进废纸篓而非直接咬死，系统关键路径永不触碰
 
 ### 下一步重点
 
-- [ ] 建立规则驱动的 `ScanPolicy`，让每个扫描项都有来源、风险、删除代价和默认动作
-- [ ] 把 iOS 备份、Xcode Archives、Docker、聊天软件、虚拟机镜像纳入「空间诊断」
-- [ ] 避免扫描和清理系统关键路径，减少用户需要自行判断的场景
+- [ ] 空间诊断视图——iOS 备份、Xcode Archives、Docker、聊天软件、虚拟机镜像
+- [ ] 规则驱动 `ScanPolicy` 白名单/黑名单文件
+- [ ] DMG 打包发布（Developer ID + 公证）
+- [ ] 中英双语
 
 ### TrashCat 不抓的东西
 
@@ -109,17 +113,25 @@ open TrashCat.xcodeproj
 
 ```
 trashcat/
-├── Sources/
-│   ├── App/              # 猫脑袋（入口）
-│   ├── UI/               # 猫的脸（界面）
-│   │   └── Components/   # 胡须、耳朵等零件
-│   ├── Engine/           # 猫鼻子（扫描引擎）
-│   ├── Model/            # 猫的脑子（数据模型）
-│   └── Utils/            # 猫爪子（工具）
-├── Tests/                # 猫的体检报告
-├── Resources/            # 猫粮（图标资源）
-└── docs/                 # 猫的档案
+├── TrashCat/
+│   ├── TrashCatApp.swift        # 猫脑袋（入口）
+│   ├── ContentView.swift        # 状态机主容器
+│   ├── Engine/                  # 猫鼻子（扫描引擎）
+│   │   └── Scanners/            # RuleScanner + 浏览器/残留
+│   ├── Model/                   # 猫的脑子
+│   │   ├── ScanModels.swift     # CleanItem/CleanRule/RiskLevel
+│   │   └── RuleRegistry.swift   # 28 条清理规则
+│   ├── UI/                      # 猫的脸
+│   └── Utils/                   # 猫爪子
+│       ├── RiskAssessor.swift
+│       ├── FileCategorizer.swift
+│       ├── ScanPolicy.swift
+│       └── PermissionManager.swift
+├── TrashCatTests/               # 猫的体检报告
+├── Resources/                   # 猫粮（图标）
+└── docs/                        # 猫的档案
     ├── prd.md
+    ├── scan-policy.md
     └── competitive-analysis.md
 ```
 

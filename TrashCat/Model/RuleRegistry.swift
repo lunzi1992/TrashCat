@@ -36,10 +36,38 @@ enum RuleRegistry {
         ),
 
         CleanRule(
+            id: "crash-reports-user",
+            title: "用户崩溃报告",
+            description: "应用崩溃产生的 .ips/.crash 诊断文件，可用于排查问题但通常不需要保留",
+            paths: ["~/Library/Logs/DiagnosticReports"],
+            category: .logs,
+            riskLevel: .safe,
+            defaultSelected: true,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "无影响"
+        ),
+
+        CleanRule(
             id: "system-logs",
             title: "系统日志",
             description: "macOS 系统级日志文件",
             paths: ["/Library/Logs"],
+            category: .logs,
+            riskLevel: .safe,
+            defaultSelected: true,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "无影响"
+        ),
+
+        CleanRule(
+            id: "crash-reports-system",
+            title: "系统崩溃报告",
+            description: "系统级崩溃诊断文件",
+            paths: ["/Library/Logs/DiagnosticReports"],
             category: .logs,
             riskLevel: .safe,
             defaultSelected: true,
@@ -61,6 +89,20 @@ enum RuleRegistry {
             minAgeDays: 7,
             deleteStrategy: .trashItem,
             impactSummary: "无影响"
+        ),
+
+        CleanRule(
+            id: "shell-sessions",
+            title: "终端会话历史",
+            description: "Shell 保存的会话恢复文件，每次打开终端时自动重建",
+            paths: ["~/.bash_sessions", "~/.zsh_sessions"],
+            category: .temp,
+            riskLevel: .safe,
+            defaultSelected: true,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "下次打开终端时自动重建"
         ),
 
         CleanRule(
@@ -163,6 +205,96 @@ enum RuleRegistry {
             impactSummary: "模拟器需要重新创建和安装，建议使用 simctl delete unavailable"
         ),
 
+        CleanRule(
+            id: "npm-cache",
+            title: "npm 缓存",
+            description: "Node.js 包管理器缓存，删除后下次安装需重新下载",
+            paths: ["~/.npm/_cacache"],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "下次 npm install 需要重新下载包"
+        ),
+
+        CleanRule(
+            id: "gradle-cache",
+            title: "Gradle 缓存",
+            description: "Android / Gradle 构建缓存，删除后需要重新下载依赖",
+            paths: ["~/.gradle/caches"],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "下次构建需重新下载所有依赖，耗时较长"
+        ),
+
+        CleanRule(
+            id: "cargo-registry",
+            title: "Cargo 注册表",
+            description: "Rust 包注册表缓存",
+            paths: ["~/.cargo/registry"],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "下次 cargo build 需重新下载"
+        ),
+
+        CleanRule(
+            id: "pub-cache",
+            title: "Dart/Flutter 缓存",
+            description: "Dart 和 Flutter 的 pub 包缓存",
+            paths: ["~/.pub-cache"],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "下次 flutter pub get 需重新下载"
+        ),
+
+        CleanRule(
+            id: "vscode-cache",
+            title: "VS Code 缓存",
+            description: "Visual Studio Code 缓存数据、扩展安装包和日志",
+            paths: [
+                "~/Library/Application Support/Code/Cache",
+                "~/Library/Application Support/Code/CachedData",
+                "~/Library/Application Support/Code/CachedExtensionVSIXs",
+                "~/Library/Application Support/Code/logs",
+                "~/Library/Application Support/Code/User/workspaceStorage",
+            ],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perDirectory,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "清除编辑器缓存和已缓存的扩展安装包，workspaceStorage 会丢失未保存的编辑器状态"
+        ),
+
+        CleanRule(
+            id: "system-updates",
+            title: "系统更新下载",
+            description: "macOS 下载的更新安装包，安装完成后通常不再需要",
+            paths: ["/Library/Updates"],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: 30,
+            deleteStrategy: .trashItem,
+            impactSummary: "如果系统更新尚未安装，删除后需要重新下载"
+        ),
+
         // ── Danger / Diagnosis Tier ──
 
         CleanRule(
@@ -205,6 +337,50 @@ enum RuleRegistry {
             minAgeDays: nil,
             deleteStrategy: .trashItem,
             impactSummary: "如果属于仍在使用但未通过 bundle ID 匹配的应用，删除后可能导致配置丢失"
+        ),
+
+        // ── Space Diagnosis Tier ──
+
+        CleanRule(
+            id: "time-machine-snapshots",
+            title: "Time Machine 本地快照",
+            description: "macOS 自动创建的 APFS 本地快照。可释放空间但不建议在此清理——请在系统设置 > 通用 > 存储空间中管理",
+            paths: [],  // handled by SpaceDiagnosticScanner via tmutil
+            category: .diagnostic,
+            riskLevel: .danger,
+            defaultSelected: false,
+            deletionUnit: .perDirectory,
+            minAgeDays: nil,
+            deleteStrategy: .manualOnly,
+            impactSummary: "包含用户文件的历史版本。建议使用系统设置管理而非手动清理"
+        ),
+
+        CleanRule(
+            id: "mail-downloads",
+            title: "邮件下载与附件",
+            description: "Mail.app 下载的邮件内容和附件",
+            paths: [],  // handled by SpaceDiagnosticScanner
+            category: .diagnostic,
+            riskLevel: .danger,
+            defaultSelected: false,
+            deletionUnit: .perDirectory,
+            minAgeDays: nil,
+            deleteStrategy: .manualOnly,
+            impactSummary: "包含邮件附件和下载内容。建议在 Mail.app 中管理，不要直接删除"
+        ),
+
+        CleanRule(
+            id: "messages-attachments",
+            title: "信息附件",
+            description: "iMessage 中的图片、视频等附件文件",
+            paths: [],  // handled by SpaceDiagnosticScanner
+            category: .diagnostic,
+            riskLevel: .danger,
+            defaultSelected: false,
+            deletionUnit: .perDirectory,
+            minAgeDays: nil,
+            deleteStrategy: .manualOnly,
+            impactSummary: "包含聊天附件。建议在信息.app 中管理，不要直接删除"
         ),
     ]
 

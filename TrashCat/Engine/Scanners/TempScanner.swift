@@ -8,6 +8,7 @@ final class TempScanner: Scannable {
     private let maxItems = 10000
 
     private var scanPaths: [String] {
+        let home = fileManager.homeDirectoryForCurrentUser.path
         var paths = [
             "/tmp",
             "/private/tmp",
@@ -15,6 +16,14 @@ final class TempScanner: Scannable {
         ]
         // Also add the user's T/ folder inside /private/var/folders
         paths.append(NSTemporaryDirectory())
+
+        // Shell session histories (safe to clean, auto-recreated)
+        let shellPaths = [
+            "\(home)/.bash_sessions",
+            "\(home)/.zsh_sessions",
+        ]
+        paths.append(contentsOf: shellPaths.filter { fileManager.fileExists(atPath: $0) })
+
         return paths
     }
 
@@ -47,6 +56,7 @@ final class TempScanner: Scannable {
 
         for case let url as URL in enumerator {
             guard items.count < maxItems else { break }
+            guard !ScanPolicy.isBlocked(url.path) else { continue }
 
             guard let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey]),
                   let isDir = resourceValues.isDirectory,

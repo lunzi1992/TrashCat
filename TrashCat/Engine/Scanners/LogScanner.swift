@@ -9,10 +9,19 @@ final class LogScanner: Scannable {
 
     private var scanPaths: [String] {
         let home = fileManager.homeDirectoryForCurrentUser.path
-        return [
+        var paths = [
             "\(home)/Library/Logs",
             "/Library/Logs",
         ]
+
+        // Crash reports and diagnostic logs — can accumulate GBs over time
+        let diagnosticPaths = [
+            "\(home)/Library/Logs/DiagnosticReports",
+            "/Library/Logs/DiagnosticReports",
+        ]
+        paths.append(contentsOf: diagnosticPaths.filter { fileManager.fileExists(atPath: $0) })
+
+        return paths
     }
 
     func scan() async throws -> ScanResult {
@@ -44,6 +53,7 @@ final class LogScanner: Scannable {
 
         for case let url as URL in enumerator {
             guard items.count < maxItems else { break }
+            guard !ScanPolicy.isBlocked(url.path) else { continue }
 
             guard let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey]),
                   let isDir = resourceValues.isDirectory,

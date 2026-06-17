@@ -6,10 +6,10 @@ final class OrphanScanner: Scannable {
 
     private let fileManager = FileManager.default
 
-    // Bundle IDs to always skip (Apple system apps)
+    // Bundle ID prefixes to always skip (Apple system apps)
+    // Uses dot-terminated prefixes to avoid matching non-Apple IDs
     private let systemBundlePrefixes = [
         "com.apple.",
-        "com.apple",
     ]
 
     /// Directories where orphaned files hide
@@ -121,6 +121,8 @@ final class OrphanScanner: Scannable {
         }
 
         for url in contents {
+            guard !ScanPolicy.isBlocked(url.path) else { continue }
+
             let name = url.lastPathComponent
             let stem = (name as NSString).deletingPathExtension.lowercased()
 
@@ -129,12 +131,28 @@ final class OrphanScanner: Scannable {
                 continue
             }
 
-            // Check if any installed app's bundle ID matches this file/dir name
+            // Check if any installed app's bundle ID matches this file/dir name.
+            // Uses dot-boundary prefix matching to avoid short stems (e.g. "com")
+            // matching unrelated bundle IDs.
             let matched = installedIDs.contains { installedID in
                 let lowered = installedID.lowercased()
-                return lowered == stem
-                    || lowered.hasPrefix(stem)
-                    || stem.hasPrefix(lowered)
+
+                // Exact match
+                if lowered == stem { return true }
+
+                // Dot-boundary prefix match: only when both contain at least one dot,
+                // and the prefix ends at a domain-segment boundary.
+                // e.g. stem "com.google.Chrome" matches installed "com.google.Chrome.helper"
+                //      stem "com.google.Chrome.helper" matches installed "com.google.Chrome"
+                let stemHasDot = stem.contains(".")
+                let loweredHasDot = lowered.contains(".")
+                if stemHasDot && loweredHasDot {
+                    if lowered.hasPrefix(stem + ".") || stem.hasPrefix(lowered + ".") {
+                        return true
+                    }
+                }
+
+                return false
             }
 
             if !matched {

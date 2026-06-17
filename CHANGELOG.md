@@ -87,6 +87,30 @@ TrashCat/
 
 ## [Unreleased]
 
+### 🔧 P0 安全修复 (2026-06-17)
+
+- **CacheScanner 移除危险路径**：iOS 备份 (`MobileSync/Backup`) 和 Xcode Archives 从缓存扫描器中移除。这些属于"空间诊断"范畴（scan-policy.md §2.3），不应出现在一键清理中。
+- **ScanPolicy blocklist 落地**：所有 6 个扫描器（Cache/Browser/Log/Temp/Trash/Orphan）的文件枚举循环中新增 `ScanPolicy.isBlocked()` 检查，确保 `/System`、`/bin`、`/sbin`、`/usr`、`/private/var/db`、`Keychains` 等系统关键路径不被扫描或清理。
+- **OrphanScanner 前缀匹配收紧**：匹配逻辑由无约束 `hasPrefix` 改为 dot-boundary 前缀匹配（`hasPrefix(stem + ".")`），防止短 stem（如 `com`）误匹配到不相关的已安装应用，减少残留漏报。
+
+### 🚀 P1 功能增强 (2026-06-17)
+
+- **并发扫描 (TaskGroup)**：6 个扫描器从串行改为 `withTaskGroup` 并发执行，总扫描时间从"各扫描器之和"降到"最慢那个的时间"，典型场景提速 2-3x。
+- **取消扫描**：`ScanCoordinator` 支持 `cancelScan()`，扫描中可随时取消并回到首页。
+- **补充扫描目标**：
+  - 崩溃报告：`~/Library/Logs/DiagnosticReports`、`/Library/Logs/DiagnosticReports`（可达数 GB 的 .ips/.crash 文件）
+  - 系统更新下载：`/Library/Updates`（macOS 更新包残留）
+  - Shell 会话历史：`~/.bash_sessions`、`~/.zsh_sessions`
+  - 开发者工具缓存：npm (`~/.npm`)、Gradle (`~/.gradle`)、Cargo (`~/.cargo`)、Dart/Flutter (`~/.pub-cache`)
+  - VS Code 缓存：`Cache`、`CachedData`、`CachedExtensionVSIXs`、`logs`、`workspaceStorage`
+- **运行中应用保护**：新增 `isRunningAppPath()` 检测。如果缓存文件属于正在运行的应用，风险等级从"推荐清理"降级为"需要确认"，避免清理导致运行中应用崩溃或数据丢失。
+- **风险路径补充**：`/Library/Updates` 和 VS Code `workspaceStorage` 加入 caution 路径列表。
+- **空间诊断扫描器**：新增 `SpaceDiagnosticScanner`，覆盖 Time Machine 本地快照（通过 `tmutil`）、Mail 邮件附件、Messages 信息附件。所有诊断项标记为 `manualOnly`，不支持一键清理。
+- **CleanCategory 新增 `.diagnostic`**：独立的"空间诊断"类别，在 FileCategorizer、RiskAssessor 中全面支持。
+- **RuleRegistry 扩展**：从 15 条规则扩展到 28 条，新增崩溃报告、Shell 会话、npm/Gradle/Cargo/Flutter 缓存、VS Code 缓存、系统更新、Time Machine、Mail、Messages 规则。
+- **RuleScanner 安全加固**：添加 `ScanPolicy.isBlocked()` 检查。
+- **测试代码**：`TrashCatTests/` 目录包含 RiskAssessor 和 ScanPolicy 的单元测试用例，待通过 Xcode test target 运行。
+
 ### 方向校准
 - 项目目标从“扫描尽可能多的垃圾并一键清理”调整为“底层判断清楚，默认只清理确定安全项”。
 - 新增扫描策略基准文档：`docs/scan-policy.md`。

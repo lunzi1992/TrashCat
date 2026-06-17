@@ -93,6 +93,7 @@ enum FileCategorizer {
         case .trash:        return "废纸篓"
         case .browserCache: return "浏览器"
         case .orphan:       return "已卸载应用"
+        case .diagnostic:   return "空间诊断"
         }
     }
 

@@ -21,13 +21,27 @@ final class CacheScanner: Scannable {
         paths.append(userVarFolder)
 
         // Developer tool caches (append if exist)
+        // Note: Xcode Archives and iOS Backups are intentionally excluded —
+        // they belong to "空间诊断" (space diagnosis), not one-click cleanup.
+        // See docs/scan-policy.md §2.3
         let devPaths = [
+            // Xcode
             "\(home)/Library/Developer/Xcode/DerivedData",
             "\(home)/Library/Developer/Xcode/iOS DeviceSupport",
             "\(home)/Library/Developer/CoreSimulator/Devices",
-            "\(home)/Library/Developer/Xcode/Archives",
-            // iOS backups
-            "\(home)/Library/Application Support/MobileSync/Backup",
+            // Package managers & language toolchains
+            "\(home)/.npm/_cacache",                     // npm
+            "\(home)/.gradle/caches",                     // Gradle / Android Studio
+            "\(home)/.cargo/registry",                    // Rust / Cargo
+            "\(home)/.pub-cache",                         // Dart / Flutter
+            // VS Code (cache subdirectories only)
+            "\(home)/Library/Application Support/Code/Cache",
+            "\(home)/Library/Application Support/Code/CachedData",
+            "\(home)/Library/Application Support/Code/CachedExtensionVSIXs",
+            "\(home)/Library/Application Support/Code/logs",
+            "\(home)/Library/Application Support/Code/User/workspaceStorage",
+            // System update downloads
+            "/Library/Updates",
         ]
         paths.append(contentsOf: devPaths.filter { fileManager.fileExists(atPath: $0) })
 
@@ -66,6 +80,7 @@ final class CacheScanner: Scannable {
 
         for case let url as URL in enumerator {
             guard items.count < maxItems else { break }
+            guard !ScanPolicy.isBlocked(url.path) else { continue }
 
             guard let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey]),
                   let isDir = resourceValues.isDirectory,

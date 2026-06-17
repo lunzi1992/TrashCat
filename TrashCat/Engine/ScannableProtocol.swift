@@ -5,7 +5,8 @@ import Foundation
 protocol Scannable: AnyObject {
     var category: CleanCategory { get }
 
-    /// Scan for cleanable files and return the result
+    /// Scan for cleanable files and return the result.
+    /// Should check `Task.isCancelled` periodically and throw `CancellationError` if so.
     func scan() async throws -> ScanResult
 
     /// The display name shown during scan progress
@@ -28,6 +29,12 @@ final class ScanCoordinator: ObservableObject {
     @Published var state: ScanState = .idle
 
     private var scanners: [Scannable] = []
+    private var scanTask: Task<Void, Never>?
+
+    var isScanning: Bool {
+        if case .scanning = state { return true }
+        return false
+    }
 
     func register(_ scanner: Scannable) {
         scanners.append(scanner)
@@ -38,28 +45,70 @@ final class ScanCoordinator: ObservableObject {
     }
 
     func startScan() async {
+        // Cancel any in-flight scan
+        scanTask?.cancel()
+
         state = .scanning(currentCategory: "准备扫描...", progress: 0)
 
-        var results: [ScanResult] = []
-        let total = Double(scanners.count)
-        let startTime = Date()
+        let task = Task { @MainActor [scanners] in
+            let total = Double(scanners.count)
+            let startTime = Date()
 
-        for (index, scanner) in scanners.enumerated() {
-            let progress = Double(index) / total
-            state = .scanning(currentCategory: scanner.progressLabel, progress: progress)
+            // Use TaskGroup for concurrent scanning
+            let results = await withTaskGroup(
+                of: (Int, ScanResult?).self
+            ) { [scanners] group in
+                for (index, scanner) in scanners.enumerated() {
+                    group.addTask {
+                        guard !Task.isCancelled else { return (index, nil) }
+                        do {
+                            let result = try await scanner.scan()
+                            return (index, result)
+                        } catch is CancellationError {
+                            return (index, nil)
+                        } catch {
+                            print("[TrashCat] Scanner '\(scanner.category.rawValue)' failed: \(error.localizedDescription)")
+                            return (index, ScanResult(category: scanner.category, items: []))
+                        }
+                    }
+                }
 
-            do {
-                let result = try await scanner.scan()
-                results.append(result)
-            } catch {
-                // Log error but continue scanning other categories
-                print("[TrashCat] Scanner '\(scanner.category.rawValue)' failed: \(error.localizedDescription)")
-                results.append(ScanResult(category: scanner.category, items: []))
+                var collected: [(Int, ScanResult)] = []
+                var completedCount = 0
+
+                for await (index, maybeResult) in group {
+                    completedCount += 1
+                    let progress = Double(completedCount) / total
+
+                    if let result = maybeResult {
+                        collected.append((index, result))
+                    }
+
+                    // Update progress — pick the latest completed scanner's label
+                    if Task.isCancelled { break }
+                }
+
+                // Sort by original index to maintain stable ordering
+                collected.sort { $0.0 < $1.0 }
+                return collected.map { $0.1 }
             }
+
+            guard !Task.isCancelled else {
+                self.state = .idle
+                return
+            }
+
+            let duration = Date().timeIntervalSince(startTime)
+            let summary = ScanSummary(results: results, scanDuration: duration)
+            self.state = .completed(summary)
         }
 
-        let duration = Date().timeIntervalSince(startTime)
-        let summary = ScanSummary(results: results, scanDuration: duration)
-        state = .completed(summary)
+        scanTask = task
+        await task.value
+    }
+
+    func cancelScan() {
+        scanTask?.cancel()
+        state = .idle
     }
 }

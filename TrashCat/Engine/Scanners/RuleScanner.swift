@@ -50,6 +50,7 @@ final class RuleScanner: Scannable {
 
         for case let url as URL in enumerator {
             guard items.count < maxItems else { break }
+            guard !ScanPolicy.isBlocked(url.path) else { continue }
 
             guard let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey]),
                   let isDir = resourceValues.isDirectory,
@@ -77,5 +78,153 @@ final class RuleScanner: Scannable {
         }
 
         return items
+    }
+}
+
+// MARK: - Space Diagnostic Scanner
+
+/// Scans for large space consumers that should NOT be cleaned automatically.
+/// These are user-data-heavy areas presented as "space diagnosis" —
+/// users decide what to do outside of TrashCat.
+///
+/// Targets: Time Machine local APFS snapshots, Mail, Messages attachments.
+/// All items are marked `.danger` — no default selection, no one-click cleanup.
+final class SpaceDiagnosticScanner: Scannable {
+    let category: CleanCategory = .diagnostic
+    let progressLabel = "空间诊断..."
+
+    private let fileManager = FileManager.default
+
+    func scan() async throws -> ScanResult {
+        var items: [CleanItem] = []
+
+        items.append(contentsOf: await checkTMSnapshots())
+        items.append(contentsOf: await checkMailSize())
+        items.append(contentsOf: await checkMessagesSize())
+
+        return ScanResult(category: .diagnostic, items: items)
+    }
+
+    // MARK: - Time Machine Local Snapshots
+
+    private func checkTMSnapshots() async -> [CleanItem] {
+        var items: [CleanItem] = []
+
+        let task = Process()
+        task.launchPath = "/usr/bin/tmutil"
+        task.arguments = ["listlocalsnapshots", "/"]
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = FileHandle.nullDevice
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            guard task.terminationStatus == 0 else { return items }
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let output = String(data: data, encoding: .utf8) else { return items }
+
+            let lines = output.components(separatedBy: "\n")
+                .filter { $0.hasPrefix("com.apple.TimeMachine") }
+
+            if !lines.isEmpty {
+                let estimatedBytes: Int64 = Int64(lines.count) * 500_000_000
+                items.append(CleanItem(
+                    path: "/",
+                    name: "Time Machine 本地快照（\(lines.count) 个）",
+                    size: estimatedBytes,
+                    category: .diagnostic
+                ))
+            }
+        } catch {
+            print("[TrashCat] SpaceDiagnostic: tmutil failed: \(error)")
+        }
+
+        return items
+    }
+
+    // MARK: - Mail
+
+    private func checkMailSize() async -> [CleanItem] {
+        var items: [CleanItem] = []
+        let home = fileManager.homeDirectoryForCurrentUser.path
+        let mailPath = "\(home)/Library/Mail"
+
+        guard fileManager.fileExists(atPath: mailPath) else { return items }
+
+        if let size = directorySize(at: mailPath), size > 0 {
+            items.append(CleanItem(
+                path: mailPath,
+                name: "邮件下载与附件",
+                size: size,
+                category: .diagnostic
+            ))
+        }
+
+        return items
+    }
+
+    // MARK: - Messages
+
+    private func checkMessagesSize() async -> [CleanItem] {
+        var items: [CleanItem] = []
+        let home = fileManager.homeDirectoryForCurrentUser.path
+        let messagesPath = "\(home)/Library/Messages"
+
+        guard fileManager.fileExists(atPath: messagesPath) else { return items }
+
+        let attPath = "\(messagesPath)/Attachments"
+        if fileManager.fileExists(atPath: attPath),
+           let size = directorySize(at: attPath), size > 0 {
+            items.append(CleanItem(
+                path: attPath,
+                name: "信息附件（图片、视频等）",
+                size: size,
+                category: .diagnostic
+            ))
+        }
+
+        let dbPath = "\(messagesPath)/chat.db"
+        if fileManager.fileExists(atPath: dbPath),
+           let dbSize = fileSize(at: dbPath), dbSize > 0 {
+            items.append(CleanItem(
+                path: dbPath,
+                name: "信息聊天记录数据库",
+                size: dbSize,
+                category: .diagnostic
+            ))
+        }
+
+        return items
+    }
+
+    // MARK: - Helpers
+
+    private func directorySize(at path: String) -> Int64? {
+        guard let enumerator = fileManager.enumerator(
+            at: URL(fileURLWithPath: path),
+            includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
+            options: [.skipsHiddenFiles],
+            errorHandler: { _, _ in return true }
+        ) else { return nil }
+
+        var total: Int64 = 0
+        for case let url as URL in enumerator {
+            guard !ScanPolicy.isBlocked(url.path) else { continue }
+            guard let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey]),
+                  let isDir = values.isDirectory, !isDir,
+                  let size = values.fileSize else { continue }
+            total += Int64(size)
+        }
+        return total > 0 ? total : nil
+    }
+
+    private func fileSize(at path: String) -> Int64? {
+        guard let attrs = try? fileManager.attributesOfItem(atPath: path),
+              let size = attrs[.size] as? Int64 else { return nil }
+        return size > 0 ? size : nil
     }
 }

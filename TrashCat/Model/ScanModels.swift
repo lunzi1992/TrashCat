@@ -66,6 +66,7 @@ enum CleanCategory: String, CaseIterable, Identifiable {
     case temp          = "临时文件"
     case trash         = "废纸篓"
     case orphan        = "应用残留"
+    case diagnostic    = "空间诊断"
 
     var id: String { rawValue }
 
@@ -77,6 +78,7 @@ enum CleanCategory: String, CaseIterable, Identifiable {
         case .temp:         return "临时文件"
         case .trash:        return "废纸篓"
         case .orphan:       return "可能的应用残留"
+        case .diagnostic:   return "空间诊断"
         }
     }
 
@@ -88,6 +90,7 @@ enum CleanCategory: String, CaseIterable, Identifiable {
         case .temp:         return "clock"
         case .trash:        return "trash"
         case .orphan:       return "app.dashed"
+        case .diagnostic:   return "magnifyingglass.circle"
         }
     }
 
@@ -99,6 +102,7 @@ enum CleanCategory: String, CaseIterable, Identifiable {
         case .temp:         return "系统临时文件夹中的残留"
         case .trash:        return "废纸篓中尚未清空的项目"
         case .orphan:       return "已卸载应用的配置文件残留"
+        case .diagnostic:   return "大空间占用诊断（仅展示，不自动清理）"
         }
     }
 }

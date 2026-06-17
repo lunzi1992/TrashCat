@@ -7,6 +7,6 @@ struct TrashCatApp: App {
             ContentView()
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+        .defaultSize(width: 720, height: 540)
     }
 }

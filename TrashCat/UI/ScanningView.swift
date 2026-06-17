@@ -3,6 +3,7 @@ import SwiftUI
 struct ScanningView: View {
     let category: String
     let progress: Double
+    let onCancel: () -> Void
 
     @State private var catFrame = 0
     @State private var dots = ""
@@ -43,6 +44,13 @@ struct ScanningView: View {
             }
 
             Spacer()
+
+            // Cancel button
+            Button(action: onCancel) {
+                Text("取消扫描")
+                    .font(.caption)
+            }
+            .padding(.bottom, 8)
 
             Text("TrashCat 正在翻你 Mac 的角落...")
                 .font(.caption)

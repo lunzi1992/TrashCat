@@ -10,14 +10,14 @@ struct ContentView: View {
             case .idle:
                 idleView
             case .scanning(let category, let progress):
-                ScanningView(category: category, progress: progress)
+                ScanningView(category: category, progress: progress, onCancel: { coordinator.cancelScan() })
             case .completed(let summary):
                 ResultsView(summary: summary, coordinator: coordinator)
             case .error(let message):
                 errorView(message)
             }
         }
-        .frame(minWidth: 500, idealWidth: 540, minHeight: 420, idealHeight: 460)
+        .frame(minWidth: 680, idealWidth: 720, minHeight: 500, idealHeight: 540)
         .onAppear {
             // Register rule-based scanners for all path-defined rules
             let ruleScanners: [Scannable] = RuleRegistry.all
@@ -28,6 +28,7 @@ struct ContentView: View {
             // Special scanners (dynamic paths — browser cache, orphan detection)
             coordinator.register(BrowserCacheScanner())
             coordinator.register(OrphanScanner())
+            coordinator.register(SpaceDiagnosticScanner())
             showPermissionGuide = !PermissionManager.shared.hasFullDiskAccess
         }
         .sheet(isPresented: $showPermissionGuide) {
@@ -64,16 +65,17 @@ struct ContentView: View {
                     await coordinator.startScan()
                 }
             }) {
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Image(systemName: "magnifyingglass.circle.fill")
-                        .font(.system(size: 40))
+                        .font(.system(size: 44))
                     Text("开始扫描")
-                        .font(.headline)
+                        .font(.title3)
+                        .fontWeight(.semibold)
                     Text("让我闻一闻你的 Mac 里藏了什么")
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-                .frame(width: 220, height: 120)
+                .frame(width: 320, height: 140)
             }
             .buttonStyle(.plain)
             .background(

@@ -33,6 +33,7 @@ final class TrashScanner: Scannable {
 
         for case let url as URL in enumerator {
             guard items.count < maxItems else { break }
+            guard !ScanPolicy.isBlocked(url.path) else { continue }
 
             guard let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey]),
                   let isDir = resourceValues.isDirectory,

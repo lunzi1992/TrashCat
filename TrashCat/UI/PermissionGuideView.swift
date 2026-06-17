@@ -49,7 +49,7 @@ struct PermissionGuideView: View {
             Spacer()
         }
         .padding(40)
-        .frame(width: 480, height: 420)
+        .frame(width: 540, height: 460)
     }
 }
 
