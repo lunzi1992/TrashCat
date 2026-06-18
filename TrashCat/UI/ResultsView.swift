@@ -122,7 +122,7 @@ struct ResultsView: View {
         let color = tier.riskLevel.tint
 
         return VStack(spacing: 0) {
-            Button(action: { withAnimation { expandedTiers.toggleMember(tier.id) } }) {
+            Button(action: { expandedTiers.toggleMember(tier.id) }) {
                 HStack(spacing: 10) {
                     Button(action: {
                         if allSel { selectedItems.subtract(tier.allIds) }
@@ -173,7 +173,7 @@ struct ResultsView: View {
         let someSel = !rule.allIds.isDisjoint(with: selectedItems)
 
         return VStack(spacing: 0) {
-            Button(action: { withAnimation { expandedRules.toggleMember(rule.id) } }) {
+            Button(action: { expandedRules.toggleMember(rule.id) }) {
                 HStack(spacing: 8) {
                     Button(action: {
                         if allSel { selectedItems.subtract(rule.allIds) }
@@ -227,7 +227,7 @@ struct ResultsView: View {
                 Spacer()
                 Text("\(app.fileCount) 个文件").font(.caption2).foregroundColor(.secondary)
                 Text(app.totalSize.formattedSize).font(.caption).foregroundColor(.secondary)
-                Button(action: { withAnimation { showFiles.toggleMember(app.id) } }) {
+                Button(action: { showFiles.toggleMember(app.id) }) {
                     Image(systemName: filesShown ? "chevron.up" : "chevron.down")
                         .font(.caption2).foregroundColor(.secondary)
                 }.buttonStyle(.plain)
