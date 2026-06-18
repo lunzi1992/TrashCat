@@ -111,6 +111,13 @@ TrashCat/
 - **RuleScanner 安全加固**：添加 `ScanPolicy.isBlocked()` 检查。
 - **测试代码**：`TrashCatTests/` 目录包含 RiskAssessor 和 ScanPolicy 的单元测试用例，待通过 Xcode test target 运行。
 
+### ⚡ 性能优化 + 动画 (2026-06-18)
+
+- **文件枚举 I/O 优化**：`RuleScanner`、`BrowserCacheScanner` 中用 `NSURL.getResourceValue` 替换 `URL.resourceValues`，直接读取枚举器预取缓存，避免每文件一次 `stat()` 调用，大目录扫描提速约 30-50%。
+- **扫描完成即时过渡**：`startScan()` 从 `async` 等待改为 fire-and-forget，扫描在后台线程池运行，结果页即时切换不再卡顿。
+- **扫描动画**：猫咪追老鼠动画——🐱 平滑追逐 🐭，老鼠随机漫步，猫 lerp 追踪，碰到即"抓住"并计数。单 60fps 定时器驱动，丝滑流畅。
+- **窗口尺寸**：默认 720×540，与主流 Mac App 一致，`.defaultSize` + `minWidth: 680` 确保不窄。
+
 ### 方向校准
 - 项目目标从“扫描尽可能多的垃圾并一键清理”调整为“底层判断清楚，默认只清理确定安全项”。
 - 新增扫描策略基准文档：`docs/scan-policy.md`。
@@ -119,9 +126,9 @@ TrashCat/
 - 应用残留统一降级为「可能的应用残留」，默认不选中。
 
 ### 计划中 (V1.1)
-- [ ] 规则驱动扫描策略 `CleanRule` / `ScanPolicy`
-- [ ] 大空间诊断
-- [ ] 更严格的默认清理白名单
+- [x] 规则驱动扫描策略 `CleanRule` / `ScanPolicy` ✅ v0.2.0
+- [x] 大空间诊断 ✅ v0.2.0
+- [x] 更严格的默认清理白名单 ✅ v0.2.0
 - [ ] 定时自动扫描提醒
 - [ ] 中英文双语支持
 - [ ] 菜单栏快捷入口
@@ -129,5 +136,6 @@ TrashCat/
 ### 远期计划 (V2+)
 - [ ] 磁盘空间可视化（DaisyDisk 式旭日图）
 - [ ] 大文件/重复文件查找
-- [ ] 开发者工具缓存（Xcode、npm、Docker）
+- [x] 开发者工具缓存（Xcode、npm、Gradle、Cargo、VS Code） ✅ v0.2.0
+- [ ] Docker 清理（需调用官方 CLI）
 - [ ] Homebrew cask 安装

@@ -176,17 +176,21 @@ final class BrowserCacheScanner: Scannable {
             guard items.count < maxItems else { break }
             guard !ScanPolicy.isBlocked(url.path) else { continue }
 
-            guard let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey]),
-                  let isDir = resourceValues.isDirectory,
-                  !isDir,
-                  let fileSize = resourceValues.fileSize,
-                  fileSize > 0 else { continue }
+            // Use NSURL.getResourceValue to read from enumerator's pre-fetched cache
+            let nsurl = url as NSURL
+            var isDir: AnyObject?
+            guard let _ = try? nsurl.getResourceValue(&isDir, forKey: .isDirectoryKey),
+                  let dirNum = isDir as? NSNumber, !dirNum.boolValue else { continue }
+
+            var fileSizeNum: AnyObject?
+            guard let _ = try? nsurl.getResourceValue(&fileSizeNum, forKey: .fileSizeKey),
+                  let sizeNum = fileSizeNum as? NSNumber, sizeNum.intValue > 0 else { continue }
 
             let relative = "[\(browser)] " + url.path.replacingOccurrences(of: path + "/", with: "")
             items.append(CleanItem(
                 path: url.path,
                 name: relative,
-                size: Int64(fileSize),
+                size: Int64(sizeNum.intValue),
                 category: .browserCache
             ))
         }

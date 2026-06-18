@@ -52,26 +52,33 @@ final class RuleScanner: Scannable {
             guard items.count < maxItems else { break }
             guard !ScanPolicy.isBlocked(url.path) else { continue }
 
-            guard let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey]),
-                  let isDir = resourceValues.isDirectory,
-                  !isDir,
-                  let fileSize = resourceValues.fileSize,
-                  fileSize > 0 else {
-                continue
-            }
+            // Use NSURL.getResourceValue to read from enumerator's pre-fetched cache
+            // (avoids a fresh stat() call per file — significant I/O savings)
+            let nsurl = url as NSURL
+
+            var isDir: AnyObject?
+            guard let _ = try? nsurl.getResourceValue(&isDir, forKey: .isDirectoryKey),
+                  let dirNum = isDir as? NSNumber, !dirNum.boolValue else { continue }
+
+            var fileSize: AnyObject?
+            guard let _ = try? nsurl.getResourceValue(&fileSize, forKey: .fileSizeKey),
+                  let sizeNum = fileSize as? NSNumber, sizeNum.intValue > 0 else { continue }
 
             // Age filter
-            if let minDays = rule.minAgeDays, minDays > 0,
-               let modDate = resourceValues.contentModificationDate {
-                let age = Calendar.current.dateComponents([.day], from: modDate, to: Date()).day ?? 0
-                if age < minDays { continue }
+            if let minDays = rule.minAgeDays, minDays > 0 {
+                var modDate: AnyObject?
+                if let _ = try? nsurl.getResourceValue(&modDate, forKey: .contentModificationDateKey),
+                   let date = modDate as? Date {
+                    let age = Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 0
+                    if age < minDays { continue }
+                }
             }
 
             let relative = url.path.replacingOccurrences(of: path + "/", with: "")
             items.append(CleanItem(
                 path: url.path,
                 name: relative,
-                size: Int64(fileSize),
+                size: Int64(sizeNum.intValue),
                 category: rule.category,
                 ruleId: rule.id
             ))
@@ -96,11 +103,16 @@ final class SpaceDiagnosticScanner: Scannable {
     private let fileManager = FileManager.default
 
     func scan() async throws -> ScanResult {
-        var items: [CleanItem] = []
+        // Offload blocking calls (Process, FileManager) to a background queue
+        // to avoid starving the cooperative thread pool.
+        async let tm = Task.detached { await self.checkTMSnapshots() }.value
+        async let mail = Task.detached { await self.checkMailSize() }.value
+        async let messages = Task.detached { await self.checkMessagesSize() }.value
 
-        items.append(contentsOf: await checkTMSnapshots())
-        items.append(contentsOf: await checkMailSize())
-        items.append(contentsOf: await checkMessagesSize())
+        var items: [CleanItem] = []
+        items.append(contentsOf: await tm)
+        items.append(contentsOf: await mail)
+        items.append(contentsOf: await messages)
 
         return ScanResult(category: .diagnostic, items: items)
     }

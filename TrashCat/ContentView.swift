@@ -61,9 +61,7 @@ struct ContentView: View {
 
             // Scan Button
             Button(action: {
-                Task {
-                    await coordinator.startScan()
-                }
+                coordinator.startScan()
             }) {
                 VStack(spacing: 10) {
                     Image(systemName: "magnifyingglass.circle.fill")

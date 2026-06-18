@@ -44,20 +44,21 @@ final class ScanCoordinator: ObservableObject {
         scanners.append(contentsOf: newScanners)
     }
 
-    func startScan() async {
-        // Cancel any in-flight scan
+    func startScan() {
         scanTask?.cancel()
 
         state = .scanning(currentCategory: "准备扫描...", progress: 0)
 
-        let task = Task { @MainActor [scanners] in
+        // Fire-and-forget: scanning runs in background, state updates on MainActor.
+        // No await — the caller returns immediately.
+        scanTask = Task { [scanners] in
             let total = Double(scanners.count)
             let startTime = Date()
 
-            // Use TaskGroup for concurrent scanning
+            // Offload heavy I/O to the cooperative thread pool
             let results = await withTaskGroup(
                 of: (Int, ScanResult?).self
-            ) { [scanners] group in
+            ) { group in
                 for (index, scanner) in scanners.enumerated() {
                     group.addTask {
                         guard !Task.isCancelled else { return (index, nil) }
@@ -78,33 +79,25 @@ final class ScanCoordinator: ObservableObject {
 
                 for await (index, maybeResult) in group {
                     completedCount += 1
-                    let progress = Double(completedCount) / total
-
                     if let result = maybeResult {
                         collected.append((index, result))
                     }
-
-                    // Update progress — pick the latest completed scanner's label
                     if Task.isCancelled { break }
                 }
 
-                // Sort by original index to maintain stable ordering
                 collected.sort { $0.0 < $1.0 }
                 return collected.map { $0.1 }
             }
 
             guard !Task.isCancelled else {
-                self.state = .idle
+                await MainActor.run { self.state = .idle }
                 return
             }
 
             let duration = Date().timeIntervalSince(startTime)
             let summary = ScanSummary(results: results, scanDuration: duration)
-            self.state = .completed(summary)
+            await MainActor.run { self.state = .completed(summary) }
         }
-
-        scanTask = task
-        await task.value
     }
 
     func cancelScan() {
