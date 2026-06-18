@@ -224,6 +224,88 @@ struct CleanRule: Identifiable, Equatable {
     static func == (lhs: CleanRule, rhs: CleanRule) -> Bool { lhs.id == rhs.id }
 }
 
+// MARK: - Grouped Result (for UX aggregation)
+
+/// Aggregate of items belonging to one app, within one rule.
+struct AppGroup: Identifiable {
+    let id = UUID()
+    let appName: String
+    let items: [CleanItem]
+    var totalSize: Int64 { items.reduce(0) { $0 + $1.size } }
+    var fileCount: Int { items.count }
+    var ids: Set<UUID> { Set(items.map { $0.id }) }
+}
+
+/// Aggregate of rules (or categories) containing app-level groups.
+struct RuleGroup: Identifiable {
+    let id = UUID()
+    let title: String
+    let apps: [AppGroup]
+    var totalSize: Int64 { apps.reduce(0) { $0 + $1.totalSize } }
+    var fileCount: Int { apps.reduce(0) { $0 + $1.fileCount } }
+    var allIds: Set<UUID> { apps.reduce(into: Set()) { $0.formUnion($1.ids) } }
+}
+
+/// Top-level tier grouping: risk level → rules → apps
+struct TierGroup: Identifiable {
+    let id: String  // uses riskLevel.rawValue
+    let riskLevel: RiskLevel
+    let rules: [RuleGroup]
+    var totalSize: Int64 { rules.reduce(0) { $0 + $1.totalSize } }
+    var fileCount: Int { rules.reduce(0) { $0 + $1.fileCount } }
+    var allIds: Set<UUID> { rules.reduce(into: Set()) { $0.formUnion($1.allIds) } }
+}
+
+extension ScanSummary {
+    /// Build the 3-level aggregation: Tier → Rule → App
+    func buildTierGroups() -> [TierGroup] {
+        let allItems = results.flatMap { $0.items }.filter { $0.category != .trash }
+        let trashItems = results.flatMap { $0.items }.filter { $0.category == .trash }
+
+        var tierMap: [RiskLevel: [CleanItem]] = [:]
+        for item in allItems {
+            tierMap[item.riskLevel, default: []].append(item)
+        }
+
+        let levels: [RiskLevel] = [.safe, .caution, .danger]
+        var groups: [TierGroup] = []
+
+        for level in levels {
+            guard let items = tierMap[level], !items.isEmpty else { continue }
+            let rules = buildRuleGroups(from: items)
+            groups.append(TierGroup(id: level.rawValue, riskLevel: level, rules: rules))
+        }
+
+        // Append trash as a separate tier (always safe)
+        if !trashItems.isEmpty {
+            let trashApps = buildAppGroups(from: trashItems)
+            let trashRule = RuleGroup(title: "废纸篓", apps: trashApps)
+            groups.append(TierGroup(id: "trash", riskLevel: .safe, rules: [trashRule]))
+        }
+
+        return groups
+    }
+
+    private func buildRuleGroups(from items: [CleanItem]) -> [RuleGroup] {
+        // Group by rule title (from ruleId → RuleRegistry lookup), fallback to category
+        var dict: [String: [CleanItem]] = [:]
+        for item in items {
+            let key = item.ruleId.flatMap { id in RuleRegistry.all.first(where: { $0.id == id })?.title }
+                ?? item.category.displayName
+            dict[key, default: []].append(item)
+        }
+        return dict.map { (title, ruleItems) in
+            RuleGroup(title: title, apps: buildAppGroups(from: ruleItems))
+        }.sorted { $0.title < $1.title }
+    }
+
+    private func buildAppGroups(from items: [CleanItem]) -> [AppGroup] {
+        let dict = Dictionary(grouping: items, by: { $0.appName })
+        return dict.map { AppGroup(appName: $0.key, items: $0.value) }
+            .sorted { $0.totalSize > $1.totalSize }  // largest first
+    }
+}
+
 // MARK: - Formatting Helpers
 
 extension Int64 {
