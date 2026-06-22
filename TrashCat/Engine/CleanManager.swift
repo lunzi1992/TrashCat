@@ -12,6 +12,11 @@ final class CleanManager {
         var errors: [String] = []
 
         for item in items {
+            // Safety net: skip items that are not cleanable (diagnostic / manualOnly)
+            guard item.isCleanable else {
+                errors.append("\(item.name): 此项不支持自动清理，已跳过")
+                continue
+            }
             do {
                 try await moveToTrash(path: item.path)
                 freedSize += item.size

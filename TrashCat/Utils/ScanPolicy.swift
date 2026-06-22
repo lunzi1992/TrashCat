@@ -10,20 +10,30 @@ enum ScanPolicy {
 
     /// Paths never to scan, list, or offer for cleanup.
     /// These should be checked before any scanner enumerates a directory.
+    /// Entries are matched as path prefixes (hasPrefix), so "/System" blocks
+    /// "/System/Library/..." and "/System/Applications/...".
     static let blockedPaths: [String] = [
         "/System",
         "/bin",
         "/sbin",
         "/usr",
         "/private/var/db",
+    ]
+
+    /// Path-component substrings that, if present anywhere in the path,
+    /// cause the path to be blocked. Used for directories that can appear
+    /// at different roots (e.g. /Library/Keychains and ~/Library/Keychains).
+    private static let blockedPathComponents: [String] = [
         "/Library/Keychains",
-        "Keychains",           // catches ~/Library/Keychains too
     ]
 
     /// Check if a path should be excluded from all scanning.
     static func isBlocked(_ path: String) -> Bool {
         for blocked in blockedPaths {
             if path.hasPrefix(blocked) { return true }
+        }
+        for component in blockedPathComponents {
+            if path.contains(component) { return true }
         }
         return false
     }

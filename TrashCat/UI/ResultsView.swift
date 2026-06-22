@@ -44,6 +44,12 @@ struct ResultsView: View {
         return Set(all.filter { $0.riskLevel == .safe && $0.category != .trash }.map { $0.id })
     }
 
+    /// Items that cannot be cleaned through TrashCat (diagnostic / manualOnly rules).
+    private var nonCleanableIDs: Set<UUID> {
+        let all = summary.results.flatMap { $0.items }
+        return Set(all.filter { !$0.isCleanable }.map { $0.id })
+    }
+
     var body: some View {
         if let result = cleanResult {
             CleanReportView(result: result) { coordinator.state = .idle }
@@ -51,7 +57,7 @@ struct ResultsView: View {
             mainView
                 .onAppear {
                     let all = summary.results.flatMap { $0.items }
-                    selectedItems = Set(all.filter { $0.defaultSelected }.map { $0.id })
+                    selectedItems = Set(all.filter { $0.defaultSelected && $0.isCleanable }.map { $0.id })
                     expandedTiers = Set(tierGroups.map { $0.id })
                 }
         }
@@ -117,16 +123,17 @@ struct ResultsView: View {
 
     private func tierSection(_ tier: TierGroup) -> some View {
         let isExpanded = expandedTiers.contains(tier.id)
-        let allSel = tier.allIds.isSubset(of: selectedItems)
-        let someSel = !tier.allIds.isDisjoint(with: selectedItems)
+        let cleanableIds = tier.allIds.subtracting(nonCleanableIDs)
+        let allSel = cleanableIds.isSubset(of: selectedItems)
+        let someSel = !cleanableIds.isDisjoint(with: selectedItems)
         let color = tier.riskLevel.tint
 
         return VStack(spacing: 0) {
             Button(action: { expandedTiers.toggleMember(tier.id) }) {
                 HStack(spacing: 10) {
                     Button(action: {
-                        if allSel { selectedItems.subtract(tier.allIds) }
-                        else { selectedItems.formUnion(tier.allIds) }
+                        if allSel { selectedItems.subtract(cleanableIds) }
+                        else { selectedItems.formUnion(cleanableIds) }
                     }) {
                         Image(systemName: allSel ? "checkmark.square.fill"
                                             : someSel ? "minus.square" : "square")
@@ -169,15 +176,16 @@ struct ResultsView: View {
 
     private func ruleRow(_ rule: RuleGroup, color: Color) -> some View {
         let isExpanded = expandedRules.contains(rule.id)
-        let allSel = rule.allIds.isSubset(of: selectedItems)
-        let someSel = !rule.allIds.isDisjoint(with: selectedItems)
+        let cleanableIds = rule.allIds.subtracting(nonCleanableIDs)
+        let allSel = cleanableIds.isSubset(of: selectedItems)
+        let someSel = !cleanableIds.isDisjoint(with: selectedItems)
 
         return VStack(spacing: 0) {
             Button(action: { expandedRules.toggleMember(rule.id) }) {
                 HStack(spacing: 8) {
                     Button(action: {
-                        if allSel { selectedItems.subtract(rule.allIds) }
-                        else { selectedItems.formUnion(rule.allIds) }
+                        if allSel { selectedItems.subtract(cleanableIds) }
+                        else { selectedItems.formUnion(cleanableIds) }
                     }) {
                         Image(systemName: allSel ? "checkmark.square.fill"
                                             : someSel ? "minus.square" : "square")
@@ -208,14 +216,15 @@ struct ResultsView: View {
 
     private func appRow(_ app: AppGroup, color: Color) -> some View {
         let filesShown = showFiles.contains(app.id)
-        let allSel = app.ids.isSubset(of: selectedItems)
-        let someSel = !app.ids.isDisjoint(with: selectedItems)
+        let cleanableIds = app.ids.subtracting(nonCleanableIDs)
+        let allSel = cleanableIds.isSubset(of: selectedItems)
+        let someSel = !cleanableIds.isDisjoint(with: selectedItems)
 
         return VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Button(action: {
-                    if allSel { selectedItems.subtract(app.ids) }
-                    else { selectedItems.formUnion(app.ids) }
+                    if allSel { selectedItems.subtract(cleanableIds) }
+                    else { selectedItems.formUnion(cleanableIds) }
                 }) {
                     Image(systemName: allSel ? "checkmark.square.fill"
                                         : someSel ? "minus.square" : "square")
@@ -245,14 +254,21 @@ struct ResultsView: View {
                 VStack(spacing: 0) {
                     ForEach(app.items.prefix(15)) { item in
                         HStack(spacing: 4) {
-                            Button(action: { selectedItems.toggleMember(item.id) }) {
+                            Button(action: {
+                                if item.isCleanable { selectedItems.toggleMember(item.id) }
+                            }) {
                                 Image(systemName: selectedItems.contains(item.id)
                                       ? "checkmark.square.fill" : "square")
                                     .font(.system(size: 10))
                                     .foregroundColor(selectedItems.contains(item.id) ? .accentColor : .secondary)
-                            }.buttonStyle(.plain)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!item.isCleanable)
                             Text(item.name).font(.caption2).foregroundColor(.secondary).lineLimit(1).truncationMode(.middle)
                             Spacer()
+                            if !item.isCleanable {
+                                Text("仅诊断").font(.caption2).foregroundColor(.orange).padding(.horizontal, 2)
+                            }
                             Text(item.size.formattedSize).font(.caption2).foregroundColor(.secondary)
                         }.padding(.horizontal, 44).padding(.vertical, 2)
                     }
@@ -334,7 +350,9 @@ struct ResultsView: View {
 
     private func performClean() {
         isCleaning = true
-        let items = summary.results.flatMap { $0.items }.filter { selectedItems.contains($0.id) }
+        let items = summary.results.flatMap { $0.items }.filter {
+            selectedItems.contains($0.id) && $0.isCleanable
+        }
         Task {
             let result = await CleanManager().clean(items: items)
             await MainActor.run { isCleaning = false; cleanResult = result }

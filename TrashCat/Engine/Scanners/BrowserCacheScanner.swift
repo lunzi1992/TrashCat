@@ -128,7 +128,7 @@ final class BrowserCacheScanner: Scannable {
             items.append(contentsOf: scanned)
         }
 
-        return ScanResult(category: .browserCache, items: items)
+        return ScanResult(category: .browserCache, items: items, ruleId: "browser-cache")
     }
 
     // MARK: - Browser Discovery
@@ -191,7 +191,8 @@ final class BrowserCacheScanner: Scannable {
                 path: url.path,
                 name: relative,
                 size: Int64(sizeNum.intValue),
-                category: .browserCache
+                category: .browserCache,
+                ruleId: "browser-cache"
             ))
         }
 

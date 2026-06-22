@@ -29,6 +29,13 @@
 		A10014 /* ScanningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10014; };
 		A10015 /* ResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10015; };
 		A10016 /* CleanReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10016; };
+		A10023 /* RiskAssessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10024; };
+		A10024 /* ScanPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10025; };
+		A10025 /* ScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10003; };
+		A10026 /* RiskAssessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10019; };
+		A10027 /* ScanPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10021; };
+		A10028 /* RuleRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10022; };
+		A10029 /* FileCategorizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10018; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,12 +57,15 @@
 		F10019 /* RiskAssessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiskAssessor.swift; sourceTree = "<group>"; };
 		F10021 /* ScanPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanPolicy.swift; sourceTree = "<group>"; };
 		F10022 /* RuleRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleRegistry.swift; sourceTree = "<group>"; };
+		F10026 /* TrashCatTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrashCatTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F10023 /* RuleScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleScanner.swift; sourceTree = "<group>"; };
 		F10013 /* PermissionGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionGuideView.swift; sourceTree = "<group>"; };
 		F10014 /* ScanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanningView.swift; sourceTree = "<group>"; };
 		F10015 /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
 		F10016 /* CleanReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanReportView.swift; sourceTree = "<group>"; };
 		F10020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F10024 /* RiskAssessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiskAssessorTests.swift; sourceTree = "<group>"; };
+		F10025 /* ScanPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanPolicyTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -64,6 +74,7 @@
 			children = (
 				G10001 /* TrashCat */,
 				G10002 /* Products */,
+				G10008 /* TrashCatTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -90,6 +101,15 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+				G10008 /* TrashCatTests */ = {
+					isa = PBXGroup;
+					children = (
+						F10024 /* RiskAssessorTests.swift */,
+						F10025 /* ScanPolicyTests.swift */,
+					);
+					path = TrashCatTests;
+					sourceTree = "<group>";
+				};
 		G10003 /* Model */ = {
 			isa = PBXGroup;
 			children = (
@@ -164,6 +184,22 @@
 			productReference = F10000;
 			productType = "com.apple.product-type.application";
 		};
+		N10001 /* TrashCatTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C10002;
+			buildPhases = (
+				B10003 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D10001 /* PBXTargetDependency */,
+			);
+			name = TrashCatTests;
+			productName = TrashCatTests;
+			productReference = F10026;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -176,6 +212,10 @@
 				TargetAttributes = {
 					N10000 = {
 						CreatedOnToolsVersion = 15.0;
+					};
+					N10001 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = N10000;
 					};
 				};
 			};
@@ -194,8 +234,22 @@
 			projectRoot = "";
 			targets = (
 				N10000 /* TrashCat */,
+				N10001 /* TrashCatTests */,
 			);
 		};
+		D10001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = N10000 /* TrashCat */;
+			targetProxy = T10001 /* PBXContainerItemProxy */;
+		};
+		T10001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = P10000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = N10000;
+			remoteInfo = TrashCat;
+		};
+
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -235,6 +289,15 @@
 				A10014 /* ScanningView.swift in Sources */,
 				A10015 /* ResultsView.swift in Sources */,
 				A10016 /* CleanReportView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10023 /* RiskAssessorTests.swift in Sources */,
+				A10024 /* ScanPolicyTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -339,6 +402,40 @@
 			};
 			name = Release;
 		};
+		X10020 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lunzi.trashcat.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TrashCat.app/Contents/MacOS/TrashCat";
+				BUNDLE_LOADER = "$(TEST_HOST)";
+			};
+			name = Debug;
+		};
+		X10021 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lunzi.trashcat.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TrashCat.app/Contents/MacOS/TrashCat";
+				BUNDLE_LOADER = "$(TEST_HOST)";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -356,6 +453,15 @@
 			buildConfigurations = (
 				X10010 /* Debug */,
 				X10011 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C10002 /* Build configuration list for PBXNativeTarget "TrashCatTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				X10020 /* Debug */,
+				X10021 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

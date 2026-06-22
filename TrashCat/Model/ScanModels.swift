@@ -136,6 +136,16 @@ struct CleanItem: Identifiable, Equatable {
     var defaultSelected: Bool {
         riskLevel.defaultSelected
     }
+
+    /// Whether this item can be cleaned at all through TrashCat.
+    /// Returns false for diagnostic items and rules with `manualOnly` delete strategy.
+    var isCleanable: Bool {
+        if category == .diagnostic { return false }
+        if let ruleId = ruleId, let rule = RuleRegistry.all.first(where: { $0.id == ruleId }) {
+            return rule.deleteStrategy != .manualOnly
+        }
+        return true
+    }
 }
 
 // MARK: - Scan Result

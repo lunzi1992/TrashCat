@@ -47,13 +47,19 @@ enum RiskAssessor {
 
     // MARK: - Medium-risk paths (caution by default)
 
-    private static let cautionPaths: [String] = [
+    /// Absolute paths that must appear at the **start** of the scanned path.
+    /// e.g. "/Library/Caches" matches "/Library/Caches/…" but NOT "~/Library/Caches/…"
+    private static let cautionPathPrefixes: [String] = [
+        "/Library/Caches",           // System-level cache — need admin, some system services use
+        "/Library/Updates",          // macOS update downloads — may be needed
+        "/private/var/folders",      // System per-user temp — mostly safe but some apps may rely on
+    ]
+
+    /// Relative path snippets that trigger caution anywhere in the path.
+    private static let cautionPathSubstrings: [String] = [
         "Xcode/DerivedData",         // Xcode build cache — safe to delete but slows next build
         "Xcode/iOS DeviceSupport",   // Device symbols — Xcode re-downloads but takes time
         "CoreSimulator/Devices",     // Simulator images — slow to recreate
-        "/private/var/folders",      // System per-user temp — mostly safe but some apps may rely on
-        "/Library/Caches",           // System-level cache — need admin, some system services use
-        "/Library/Updates",          // macOS update downloads — may be needed
         "workspaceStorage",          // VS Code workspace state — losing unsaved editor state
         "Application Support/Google/Chrome",    // Chrome data — cache is safe but profiles are not
         "Application Support/Microsoft Edge",   // Edge data
@@ -107,13 +113,23 @@ enum RiskAssessor {
             return .caution
         }
 
-        // Cache category: check if it's in a known safe or caution path
+        // Cache / temp category: check caution paths first, then safe paths.
+        // Order matters: a path like /Library/Caches/… contains both
+        // "/Library/Caches" (caution) and "/Caches/" (safe); the more
+        // conservative judgement must win.
+        //
+        // Prefix-matched paths (absolute system paths) are checked separately
+        // from substring paths so that "/Library/Caches" only matches the
+        // system-level directory, not "~/Library/Caches".
         if category == .cache || category == .temp {
+            for cp in cautionPathPrefixes {
+                if path.hasPrefix(cp) { return .caution }
+            }
+            for cp in cautionPathSubstrings {
+                if path.contains(cp) { return .caution }
+            }
             for sp in safePaths {
                 if path.contains(sp) { return .safe }
-            }
-            for cp in cautionPaths {
-                if path.contains(cp) { return .caution }
             }
 
             // Running app check: if this cache belongs to a running app,

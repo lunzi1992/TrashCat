@@ -36,7 +36,7 @@ final class OrphanScanner: Scannable {
             items.append(contentsOf: orphans)
         }
 
-        return ScanResult(category: .orphan, items: items)
+        return ScanResult(category: .orphan, items: items, ruleId: "orphan-files")
     }
 
     // MARK: - Get Installed Apps
@@ -165,7 +165,8 @@ final class OrphanScanner: Scannable {
                     path: url.path,
                     name: name,
                     size: Int64(fileSize),
-                    category: .orphan
+                    category: .orphan,
+                    ruleId: "orphan-files"
                 ))
             }
         }

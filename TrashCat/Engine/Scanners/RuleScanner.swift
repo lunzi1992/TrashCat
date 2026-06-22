@@ -148,7 +148,8 @@ final class SpaceDiagnosticScanner: Scannable {
                     path: "/",
                     name: "Time Machine 本地快照（\(lines.count) 个）",
                     size: estimatedBytes,
-                    category: .diagnostic
+                    category: .diagnostic,
+                    ruleId: "time-machine-snapshots"
                 ))
             }
         } catch {
@@ -172,7 +173,8 @@ final class SpaceDiagnosticScanner: Scannable {
                 path: mailPath,
                 name: "邮件下载与附件",
                 size: size,
-                category: .diagnostic
+                category: .diagnostic,
+                ruleId: "mail-downloads"
             ))
         }
 
@@ -195,7 +197,8 @@ final class SpaceDiagnosticScanner: Scannable {
                 path: attPath,
                 name: "信息附件（图片、视频等）",
                 size: size,
-                category: .diagnostic
+                category: .diagnostic,
+                ruleId: "messages-attachments"
             ))
         }
 
@@ -206,7 +209,8 @@ final class SpaceDiagnosticScanner: Scannable {
                 path: dbPath,
                 name: "信息聊天记录数据库",
                 size: dbSize,
-                category: .diagnostic
+                category: .diagnostic,
+                ruleId: "messages-attachments"
             ))
         }
 
