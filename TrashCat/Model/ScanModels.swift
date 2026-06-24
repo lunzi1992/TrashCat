@@ -254,11 +254,14 @@ struct AppGroup: Identifiable {
         self.id = "\(groupKey)|\(appName)"
         self.appName = appName
         self.items = items
+        self.totalSize = items.reduce(0) { $0 + $1.size }
+        self.fileCount = items.count
+        self.ids = Set(items.map { $0.id })
     }
 
-    var totalSize: Int64 { items.reduce(0) { $0 + $1.size } }
-    var fileCount: Int { items.count }
-    var ids: Set<UUID> { Set(items.map { $0.id }) }
+    let totalSize: Int64
+    let fileCount: Int
+    let ids: Set<UUID>
 }
 
 /// Aggregate of rules (or categories) containing app-level groups.
@@ -267,23 +270,23 @@ struct RuleGroup: Identifiable {
     let ruleId: String?
     let title: String
     let apps: [AppGroup]
+    let totalSize: Int64
+    let fileCount: Int
+    let allIds: Set<UUID>
     var rule: CleanRule? {
         guard let ruleId else { return nil }
         return RuleRegistry.byId[ruleId]
     }
-    var totalSize: Int64 { apps.reduce(0) { $0 + $1.totalSize } }
-    var fileCount: Int { apps.reduce(0) { $0 + $1.fileCount } }
-    var allIds: Set<UUID> { apps.reduce(into: Set()) { $0.formUnion($1.ids) } }
 }
 
 /// Top-level tier grouping: risk level → rules → apps
 struct TierGroup: Identifiable {
-    let id: String  // uses riskLevel.rawValue
+    let id: String
     let riskLevel: RiskLevel
     let rules: [RuleGroup]
-    var totalSize: Int64 { rules.reduce(0) { $0 + $1.totalSize } }
-    var fileCount: Int { rules.reduce(0) { $0 + $1.fileCount } }
-    var allIds: Set<UUID> { rules.reduce(into: Set()) { $0.formUnion($1.allIds) } }
+    let totalSize: Int64
+    let fileCount: Int
+    let allIds: Set<UUID>
 }
 
 extension ScanSummary {
@@ -306,19 +309,32 @@ extension ScanSummary {
         for level in levels {
             guard let items = tierMap[level], !items.isEmpty else { continue }
             let rules = buildRuleGroups(from: items)
-            groups.append(TierGroup(id: level.rawValue, riskLevel: level, rules: rules))
+            let tSize = rules.reduce(0) { $0 + $1.totalSize }
+            let tCount = rules.reduce(0) { $0 + $1.fileCount }
+            let tIds = rules.reduce(into: Set<UUID>()) { $0.formUnion($1.allIds) }
+            groups.append(TierGroup(id: level.rawValue, riskLevel: level, rules: rules,
+                                    totalSize: tSize, fileCount: tCount, allIds: tIds))
         }
 
-        // Append trash as a separate tier (always safe)
+        // Append trash as a separate tier
         if !trashItems.isEmpty {
             let trashApps = buildAppGroups(from: trashItems)
-            let trashRule = RuleGroup(id: "trash", ruleId: "trash", title: "废纸篓", apps: trashApps)
-            groups.append(TierGroup(id: "trash", riskLevel: .safe, rules: [trashRule]))
+            let aSize = trashApps.reduce(0) { $0 + $1.totalSize }
+            let aCount = trashApps.reduce(0) { $0 + $1.fileCount }
+            let aIds = trashApps.reduce(into: Set<UUID>()) { $0.formUnion($1.ids) }
+            let trashRule = RuleGroup(id: "trash", ruleId: "trash", title: "废纸篓", apps: trashApps,
+                                      totalSize: aSize, fileCount: aCount, allIds: aIds)
+            groups.append(TierGroup(id: "trash", riskLevel: .safe, rules: [trashRule],
+                                    totalSize: aSize, fileCount: aCount, allIds: aIds))
         }
 
         if !diagnosticItems.isEmpty {
             let rules = buildRuleGroups(from: diagnosticItems)
-            groups.append(TierGroup(id: "diagnostic", riskLevel: .danger, rules: rules))
+            let dSize = rules.reduce(0) { $0 + $1.totalSize }
+            let dCount = rules.reduce(0) { $0 + $1.fileCount }
+            let dIds = rules.reduce(into: Set<UUID>()) { $0.formUnion($1.allIds) }
+            groups.append(TierGroup(id: "diagnostic", riskLevel: .danger, rules: rules,
+                                    totalSize: dSize, fileCount: dCount, allIds: dIds))
         }
 
         return groups
@@ -331,9 +347,14 @@ extension ScanSummary {
         }
 
         return dict.map { (key, ruleItems) in
+            let apps = buildAppGroups(from: ruleItems)
             let rule = RuleRegistry.byId[key]
             let title = rule?.title ?? ruleItems.first?.category.displayName ?? key
-            return RuleGroup(id: key, ruleId: rule?.id, title: title, apps: buildAppGroups(from: ruleItems))
+            let rSize = apps.reduce(0) { $0 + $1.totalSize }
+            let rCount = apps.reduce(0) { $0 + $1.fileCount }
+            let rIds = apps.reduce(into: Set<UUID>()) { $0.formUnion($1.ids) }
+            return RuleGroup(id: key, ruleId: rule?.id, title: title, apps: apps,
+                             totalSize: rSize, fileCount: rCount, allIds: rIds)
         }.sorted { $0.title < $1.title }
     }
 

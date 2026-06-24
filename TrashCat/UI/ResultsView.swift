@@ -55,7 +55,6 @@ struct ResultsView: View {
                 .onAppear {
                     let defaults = allItems.filter { $0.defaultSelected && $0.isCleanable }
                     for item in defaults { addItem(item.id) }
-                    expandedTiers = Set(tierGroups.map { $0.id })
                 }
         }
     }
