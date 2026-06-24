@@ -134,6 +134,7 @@ final class BrowserCacheScanner: Scannable {
     // MARK: - Browser Discovery
 
     private func discoverInstalledBrowsers() async -> [(bundleId: String, def: BrowserDef)] {
+        var seen: Set<String> = []
         var results: [(String, BrowserDef)] = []
         let appDirs = ["/Applications", "\(fileManager.homeDirectoryForCurrentUser.path)/Applications"]
 
@@ -148,7 +149,8 @@ final class BrowserCacheScanner: Scannable {
                 guard let bundle = Bundle(url: url),
                       let bundleId = bundle.bundleIdentifier else { continue }
 
-                if let def = knownBrowsers[bundleId] {
+                if let def = knownBrowsers[bundleId], !seen.contains(bundleId) {
+                    seen.insert(bundleId)
                     results.append((bundleId, def))
                 }
             }
@@ -174,6 +176,7 @@ final class BrowserCacheScanner: Scannable {
 
         for case let url as URL in enumerator {
             guard items.count < maxItems else { break }
+            guard !Task.isCancelled else { break }
             guard !ScanPolicy.isBlocked(url.path) else { continue }
 
             // Use NSURL.getResourceValue to read from enumerator's pre-fetched cache

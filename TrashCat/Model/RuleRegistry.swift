@@ -301,8 +301,8 @@ enum RuleRegistry {
             id: "xcode-archives",
             title: "Xcode 归档文件",
             description: "已打包的 App 归档，可能用于重新导出或符号化崩溃日志",
-            paths: ["~/Library/Developer/Xcode/Archives"],
-            category: .cache,
+            paths: [],  // handled by SpaceDiagnosticScanner as top-level archives
+            category: .diagnostic,
             riskLevel: .danger,
             defaultSelected: false,
             deletionUnit: .perDirectory,
@@ -315,8 +315,8 @@ enum RuleRegistry {
             id: "ios-backup",
             title: "iOS 设备备份",
             description: "iPhone/iPad 的本地备份数据，可能包含照片、消息、应用数据",
-            paths: ["~/Library/Application Support/MobileSync/Backup"],
-            category: .cache,
+            paths: [],  // handled by SpaceDiagnosticScanner as individual backups
+            category: .diagnostic,
             riskLevel: .danger,
             defaultSelected: false,
             deletionUnit: .perDirectory,
@@ -382,7 +382,84 @@ enum RuleRegistry {
             deleteStrategy: .manualOnly,
             impactSummary: "包含聊天附件。建议在信息.app 中管理，不要直接删除"
         ),
+
+        CleanRule(
+            id: "docker-data",
+            title: "Docker 数据",
+            description: "Docker Desktop 的镜像、容器、卷和构建缓存",
+            paths: [],  // handled by SpaceDiagnosticScanner
+            category: .diagnostic,
+            riskLevel: .danger,
+            defaultSelected: false,
+            deletionUnit: .perDirectory,
+            minAgeDays: nil,
+            deleteStrategy: .manualOnly,
+            impactSummary: "可能包含数据库卷、开发环境和镜像。建议使用 Docker Desktop 或 docker system df/prune 判断"
+        ),
+
+        CleanRule(
+            id: "wechat-data",
+            title: "微信数据",
+            description: "微信聊天文件、缓存和接收的媒体内容",
+            paths: [],  // handled by SpaceDiagnosticScanner
+            category: .diagnostic,
+            riskLevel: .danger,
+            defaultSelected: false,
+            deletionUnit: .perDirectory,
+            minAgeDays: nil,
+            deleteStrategy: .manualOnly,
+            impactSummary: "包含聊天文件和媒体。建议在微信内清理，不要直接删除数据库或账号数据"
+        ),
+
+        CleanRule(
+            id: "qq-data",
+            title: "QQ 数据",
+            description: "QQ 聊天文件、缓存和接收的媒体内容",
+            paths: [],  // handled by SpaceDiagnosticScanner
+            category: .diagnostic,
+            riskLevel: .danger,
+            defaultSelected: false,
+            deletionUnit: .perDirectory,
+            minAgeDays: nil,
+            deleteStrategy: .manualOnly,
+            impactSummary: "包含聊天文件和媒体。建议在 QQ 内清理，不要直接删除账号数据"
+        ),
+
+        CleanRule(
+            id: "telegram-data",
+            title: "Telegram 数据",
+            description: "Telegram 下载、媒体缓存和本地数据",
+            paths: [],  // handled by SpaceDiagnosticScanner
+            category: .diagnostic,
+            riskLevel: .danger,
+            defaultSelected: false,
+            deletionUnit: .perDirectory,
+            minAgeDays: nil,
+            deleteStrategy: .manualOnly,
+            impactSummary: "包含下载文件和媒体缓存。建议在 Telegram 设置中管理存储空间"
+        ),
+
+        CleanRule(
+            id: "virtual-machines",
+            title: "虚拟机镜像",
+            description: "Parallels、VMware、UTM、VirtualBox 等虚拟机文件",
+            paths: [],  // handled by SpaceDiagnosticScanner
+            category: .diagnostic,
+            riskLevel: .danger,
+            defaultSelected: false,
+            deletionUnit: .perDirectory,
+            minAgeDays: nil,
+            deleteStrategy: .manualOnly,
+            impactSummary: "通常包含完整系统磁盘镜像。删除前必须确认虚拟机已不再需要"
+        ),
     ]
+
+    /// O(1) lookup by rule ID
+    static let byId: [String: CleanRule] = {
+        var dict: [String: CleanRule] = [:]
+        for rule in all { dict[rule.id] = rule }
+        return dict
+    }()
 
     // MARK: - Helpers
 

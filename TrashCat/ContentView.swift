@@ -19,16 +19,17 @@ struct ContentView: View {
         }
         .frame(minWidth: 680, idealWidth: 720, minHeight: 500, idealHeight: 540)
         .onAppear {
-            // Register rule-based scanners for all path-defined rules
-            let ruleScanners: [Scannable] = RuleRegistry.all
-                .filter { !$0.paths.isEmpty }
-                .map { RuleScanner(rule: $0) }
-            coordinator.registerAll(ruleScanners)
-
-            // Special scanners (dynamic paths — browser cache, orphan detection)
-            coordinator.register(BrowserCacheScanner())
-            coordinator.register(OrphanScanner())
-            coordinator.register(SpaceDiagnosticScanner())
+            // Guard: register scanners only once
+            if !coordinator.didRegister {
+                let ruleScanners: [Scannable] = RuleRegistry.all
+                    .filter { !$0.paths.isEmpty }
+                    .map { RuleScanner(rule: $0) }
+                coordinator.registerAll(ruleScanners)
+                coordinator.register(BrowserCacheScanner())
+                coordinator.register(OrphanScanner())
+                coordinator.register(SpaceDiagnosticScanner())
+                coordinator.didRegister = true
+            }
             showPermissionGuide = !PermissionManager.shared.hasFullDiskAccess
         }
         .sheet(isPresented: $showPermissionGuide) {

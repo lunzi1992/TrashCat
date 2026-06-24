@@ -107,4 +107,93 @@ final class ScanPolicyTests: XCTestCase {
         XCTAssertTrue(paths.contains("/usr"))
         XCTAssertTrue(paths.contains("/private/var/db"))
     }
+
+    // MARK: - Cleanability
+
+    func testDiagnosticItemsAreNotCleanable() {
+        let item = CleanItem(
+            path: "/Users/test/Library/Mail",
+            name: "邮件下载与附件",
+            size: 1024,
+            category: .diagnostic,
+            ruleId: "mail-downloads"
+        )
+
+        XCTAssertFalse(item.isCleanable)
+    }
+
+    func testManualOnlyRuleItemsAreNotCleanable() {
+        let item = CleanItem(
+            path: "/Users/test/Library/Developer/Xcode/Archives/App.xcarchive",
+            name: "App.xcarchive",
+            size: 1024,
+            category: .cache,
+            ruleId: "xcode-archives"
+        )
+
+        XCTAssertFalse(item.isCleanable)
+    }
+
+    func testTrashItemRuleIsCleanable() {
+        let item = CleanItem(
+            path: "/Users/test/Library/Caches/example.cache",
+            name: "example.cache",
+            size: 1024,
+            category: .cache,
+            ruleId: "user-cache"
+        )
+
+        XCTAssertTrue(item.isCleanable)
+    }
+
+    func testLargeUserDataRulesAreDiagnosticOnly() {
+        let diagnosticRuleIds = [
+            "ios-backup",
+            "xcode-archives",
+            "docker-data",
+            "wechat-data",
+            "qq-data",
+            "telegram-data",
+            "virtual-machines",
+        ]
+
+        for ruleId in diagnosticRuleIds {
+            let rule = RuleRegistry.all.first { $0.id == ruleId }
+            XCTAssertNotNil(rule, "Missing rule: \(ruleId)")
+            XCTAssertEqual(rule?.category, .diagnostic)
+            XCTAssertEqual(rule?.deleteStrategy, .manualOnly)
+            XCTAssertFalse(rule?.defaultSelected ?? true)
+            XCTAssertTrue(rule?.paths.isEmpty ?? false, "\(ruleId) should be handled by SpaceDiagnosticScanner")
+        }
+    }
+
+    func testDiagnosticItemsBuildSeparateTier() {
+        let cache = CleanItem(
+            path: "/Users/test/Library/Caches/example.cache",
+            name: "example.cache",
+            size: 1024,
+            category: .cache,
+            ruleId: "user-cache"
+        )
+        let diagnostic = CleanItem(
+            path: "/Users/test/Library/Application Support/MobileSync/Backup/abc",
+            name: "iOS 设备备份：abc",
+            size: 1024,
+            category: .diagnostic,
+            ruleId: "ios-backup"
+        )
+        let summary = ScanSummary(
+            results: [
+                ScanResult(category: .cache, items: [cache], ruleId: "user-cache"),
+                ScanResult(category: .diagnostic, items: [diagnostic]),
+            ],
+            scanDuration: 0
+        )
+
+        let groups = summary.buildTierGroups()
+
+        XCTAssertTrue(groups.contains { $0.id == RiskLevel.safe.rawValue })
+        XCTAssertTrue(groups.contains { $0.id == "diagnostic" })
+        XCTAssertEqual(groups.first { $0.id == "diagnostic" }?.rules.first?.ruleId, "ios-backup")
+    }
 }

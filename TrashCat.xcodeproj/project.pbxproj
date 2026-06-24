@@ -11,10 +11,6 @@
 		A10002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10002; };
 		A10003 /* ScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10003; };
 		A10004 /* ScannableProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10004; };
-		A10005 /* CacheScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10005; };
-		A10006 /* LogScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10006; };
-		A10007 /* TempScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10007; };
-		A10008 /* TrashScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10008; };
 		A10009 /* OrphanScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10009; };
 		A10017 /* BrowserCacheScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10017; };
 		A10010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10010; };
@@ -44,10 +40,6 @@
 		F10002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		F10003 /* ScanModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanModels.swift; sourceTree = "<group>"; };
 		F10004 /* ScannableProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannableProtocol.swift; sourceTree = "<group>"; };
-		F10005 /* CacheScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheScanner.swift; sourceTree = "<group>"; };
-		F10006 /* LogScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogScanner.swift; sourceTree = "<group>"; };
-		F10007 /* TempScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempScanner.swift; sourceTree = "<group>"; };
-		F10008 /* TrashScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashScanner.swift; sourceTree = "<group>"; };
 		F10009 /* OrphanScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrphanScanner.swift; sourceTree = "<group>"; };
 		F10017 /* BrowserCacheScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserCacheScanner.swift; sourceTree = "<group>"; };
 		F10010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -154,11 +146,7 @@
 		G10007 /* Scanners */ = {
 			isa = PBXGroup;
 			children = (
-				F10005 /* CacheScanner.swift */,
 				F10017 /* BrowserCacheScanner.swift */,
-				F10006 /* LogScanner.swift */,
-				F10007 /* TempScanner.swift */,
-				F10008 /* TrashScanner.swift */,
 				F10009 /* OrphanScanner.swift */,
 				F10023 /* RuleScanner.swift */,
 			);
@@ -272,10 +260,6 @@
 				A10002 /* ContentView.swift in Sources */,
 				A10003 /* ScanModels.swift in Sources */,
 				A10004 /* ScannableProtocol.swift in Sources */,
-				A10005 /* CacheScanner.swift in Sources */,
-				A10006 /* LogScanner.swift in Sources */,
-				A10007 /* TempScanner.swift in Sources */,
-				A10008 /* TrashScanner.swift in Sources */,
 				A10009 /* OrphanScanner.swift in Sources */,
 				A10017 /* BrowserCacheScanner.swift in Sources */,
 				A10011 /* CleanManager.swift in Sources */,

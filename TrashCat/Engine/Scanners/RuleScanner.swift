@@ -50,6 +50,7 @@ final class RuleScanner: Scannable {
 
         for case let url as URL in enumerator {
             guard items.count < maxItems else { break }
+            guard !Task.isCancelled else { break }
             guard !ScanPolicy.isBlocked(url.path) else { continue }
 
             // Use NSURL.getResourceValue to read from enumerator's pre-fetched cache
@@ -101,18 +102,29 @@ final class SpaceDiagnosticScanner: Scannable {
     let progressLabel = "空间诊断..."
 
     private let fileManager = FileManager.default
+    private let minimumReportSize: Int64 = 100 * 1024 * 1024
 
     func scan() async throws -> ScanResult {
         // Offload blocking calls (Process, FileManager) to a background queue
         // to avoid starving the cooperative thread pool.
         async let tm = Task.detached { await self.checkTMSnapshots() }.value
+        async let iosBackups = Task.detached { self.checkIOSBackups() }.value
+        async let xcodeArchives = Task.detached { self.checkXcodeArchives() }.value
         async let mail = Task.detached { await self.checkMailSize() }.value
         async let messages = Task.detached { await self.checkMessagesSize() }.value
+        async let docker = Task.detached { self.checkDockerData() }.value
+        async let chats = Task.detached { self.checkChatApps() }.value
+        async let virtualMachines = Task.detached { self.checkVirtualMachines() }.value
 
         var items: [CleanItem] = []
         items.append(contentsOf: await tm)
+        items.append(contentsOf: await iosBackups)
+        items.append(contentsOf: await xcodeArchives)
         items.append(contentsOf: await mail)
         items.append(contentsOf: await messages)
+        items.append(contentsOf: await docker)
+        items.append(contentsOf: await chats)
+        items.append(contentsOf: await virtualMachines)
 
         return ScanResult(category: .diagnostic, items: items)
     }
@@ -159,16 +171,38 @@ final class SpaceDiagnosticScanner: Scannable {
         return items
     }
 
+    // MARK: - iOS Backups
+
+    private func checkIOSBackups() -> [CleanItem] {
+        let backupRoot = resolve("~/Library/Application Support/MobileSync/Backup")
+        return childDirectoryItems(
+            under: backupRoot,
+            fallbackName: "iOS 设备备份",
+            ruleId: "ios-backup"
+        )
+    }
+
+    // MARK: - Xcode Archives
+
+    private func checkXcodeArchives() -> [CleanItem] {
+        let archiveRoot = resolve("~/Library/Developer/Xcode/Archives")
+        return childDirectoryItems(
+            under: archiveRoot,
+            fallbackName: "Xcode 归档文件",
+            ruleId: "xcode-archives",
+            allowedExtensions: ["xcarchive"]
+        )
+    }
+
     // MARK: - Mail
 
     private func checkMailSize() async -> [CleanItem] {
         var items: [CleanItem] = []
-        let home = fileManager.homeDirectoryForCurrentUser.path
-        let mailPath = "\(home)/Library/Mail"
+        let mailPath = resolve("~/Library/Mail")
 
         guard fileManager.fileExists(atPath: mailPath) else { return items }
 
-        if let size = directorySize(at: mailPath), size > 0 {
+        if let size = directorySize(at: mailPath), size >= minimumReportSize {
             items.append(CleanItem(
                 path: mailPath,
                 name: "邮件下载与附件",
@@ -185,14 +219,13 @@ final class SpaceDiagnosticScanner: Scannable {
 
     private func checkMessagesSize() async -> [CleanItem] {
         var items: [CleanItem] = []
-        let home = fileManager.homeDirectoryForCurrentUser.path
-        let messagesPath = "\(home)/Library/Messages"
+        let messagesPath = resolve("~/Library/Messages")
 
         guard fileManager.fileExists(atPath: messagesPath) else { return items }
 
         let attPath = "\(messagesPath)/Attachments"
         if fileManager.fileExists(atPath: attPath),
-           let size = directorySize(at: attPath), size > 0 {
+           let size = directorySize(at: attPath), size >= minimumReportSize {
             items.append(CleanItem(
                 path: attPath,
                 name: "信息附件（图片、视频等）",
@@ -204,7 +237,7 @@ final class SpaceDiagnosticScanner: Scannable {
 
         let dbPath = "\(messagesPath)/chat.db"
         if fileManager.fileExists(atPath: dbPath),
-           let dbSize = fileSize(at: dbPath), dbSize > 0 {
+           let dbSize = fileSize(at: dbPath), dbSize >= minimumReportSize {
             items.append(CleanItem(
                 path: dbPath,
                 name: "信息聊天记录数据库",
@@ -217,13 +250,171 @@ final class SpaceDiagnosticScanner: Scannable {
         return items
     }
 
+    // MARK: - Docker
+
+    private func checkDockerData() -> [CleanItem] {
+        directoryItems(
+            [
+                DiagnosticPath(
+                    path: "~/Library/Containers/com.docker.docker/Data",
+                    name: "Docker Desktop 数据"
+                ),
+                DiagnosticPath(
+                    path: "~/.docker",
+                    name: "Docker 用户配置与缓存"
+                ),
+            ],
+            ruleId: "docker-data"
+        )
+    }
+
+    // MARK: - Chat Apps
+
+    private func checkChatApps() -> [CleanItem] {
+        var items: [CleanItem] = []
+        items.append(contentsOf: directoryItems(
+            [
+                DiagnosticPath(
+                    path: "~/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat",
+                    name: "微信聊天数据"
+                ),
+                DiagnosticPath(
+                    path: "~/Library/Containers/com.tencent.xinWeChat/Data/Documents/xwechat_files",
+                    name: "微信接收文件"
+                ),
+                DiagnosticPath(
+                    path: "~/Library/Application Support/com.tencent.xinWeChat",
+                    name: "微信旧版数据"
+                ),
+            ],
+            ruleId: "wechat-data"
+        ))
+        items.append(contentsOf: directoryItems(
+            [
+                DiagnosticPath(
+                    path: "~/Library/Containers/com.tencent.qq/Data/Library/Application Support/QQ",
+                    name: "QQ 聊天数据"
+                ),
+                DiagnosticPath(
+                    path: "~/Library/Application Support/QQ",
+                    name: "QQ 旧版数据"
+                ),
+            ],
+            ruleId: "qq-data"
+        ))
+        items.append(contentsOf: directoryItems(
+            [
+                DiagnosticPath(
+                    path: "~/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram",
+                    name: "Telegram 媒体与缓存"
+                ),
+                DiagnosticPath(
+                    path: "~/Library/Application Support/Telegram Desktop",
+                    name: "Telegram Desktop 数据"
+                ),
+            ],
+            ruleId: "telegram-data"
+        ))
+        return items
+    }
+
+    // MARK: - Virtual Machines
+
+    private func checkVirtualMachines() -> [CleanItem] {
+        var items: [CleanItem] = []
+        let roots = [
+            "~/Parallels",
+            "~/Virtual Machines.localized",
+            "~/Documents/Virtual Machines.localized",
+            "~/VirtualBox VMs",
+            "~/Library/Containers/com.utmapp.UTM/Data/Documents",
+        ]
+        let extensions = ["pvm", "vmwarevm", "utm", "vbox", "vdi", "qcow2", "img"]
+
+        for root in roots.map(resolve) {
+            items.append(contentsOf: childDirectoryItems(
+                under: root,
+                fallbackName: "虚拟机镜像",
+                ruleId: "virtual-machines",
+                allowedExtensions: extensions
+            ))
+        }
+        return items
+    }
+
     // MARK: - Helpers
+
+    private struct DiagnosticPath {
+        let path: String
+        let name: String
+    }
+
+    private func resolve(_ path: String) -> String {
+        RuleRegistry.resolve(path: path)
+    }
+
+    private func directoryItems(_ targets: [DiagnosticPath], ruleId: String) -> [CleanItem] {
+        targets.compactMap { target in
+            let path = resolve(target.path)
+            guard !ScanPolicy.isBlocked(path),
+                  fileManager.fileExists(atPath: path),
+                  let size = directorySize(at: path),
+                  size >= minimumReportSize else { return nil }
+            return CleanItem(
+                path: path,
+                name: target.name,
+                size: size,
+                category: .diagnostic,
+                ruleId: ruleId
+            )
+        }
+    }
+
+    private func childDirectoryItems(
+        under root: String,
+        fallbackName: String,
+        ruleId: String,
+        allowedExtensions: [String]? = nil
+    ) -> [CleanItem] {
+        guard !ScanPolicy.isBlocked(root),
+              fileManager.fileExists(atPath: root),
+              let children = try? fileManager.contentsOfDirectory(
+                at: URL(fileURLWithPath: root),
+                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
+                options: [.skipsHiddenFiles]
+              ) else { return [] }
+
+        return children.compactMap { url in
+            if let allowedExtensions,
+               !allowedExtensions.contains(url.pathExtension.lowercased()) {
+                return nil
+            }
+            guard !ScanPolicy.isBlocked(url.path),
+                  let size = itemSize(at: url.path),
+                  size >= minimumReportSize else { return nil }
+
+            let displayName = url.lastPathComponent.isEmpty ? fallbackName : url.lastPathComponent
+            return CleanItem(
+                path: url.path,
+                name: "\(fallbackName)：\(displayName)",
+                size: size,
+                category: .diagnostic,
+                ruleId: ruleId
+            )
+        }
+    }
+
+    private func itemSize(at path: String) -> Int64? {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory) else { return nil }
+        return isDirectory.boolValue ? directorySize(at: path) : fileSize(at: path)
+    }
 
     private func directorySize(at path: String) -> Int64? {
         guard let enumerator = fileManager.enumerator(
             at: URL(fileURLWithPath: path),
             includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
-            options: [.skipsHiddenFiles],
+            options: [],
             errorHandler: { _, _ in return true }
         ) else { return nil }
 

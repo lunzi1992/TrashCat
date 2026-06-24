@@ -30,6 +30,7 @@ final class ScanCoordinator: ObservableObject {
 
     private var scanners: [Scannable] = []
     private var scanTask: Task<Void, Never>?
+    var didRegister = false
 
     var isScanning: Bool {
         if case .scanning = state { return true }

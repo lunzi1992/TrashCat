@@ -52,8 +52,10 @@ enum RiskLevel: String, Comparable, CaseIterable {
     }
 
     static func < (lhs: RiskLevel, rhs: RiskLevel) -> Bool {
-        let order: [RiskLevel] = [.safe, .caution, .danger]
-        return order.firstIndex(of: lhs)! < order.firstIndex(of: rhs)!
+        let order = RiskLevel.allCases
+        guard let lhsIdx = order.firstIndex(of: lhs),
+              let rhsIdx = order.firstIndex(of: rhs) else { return false }
+        return lhsIdx < rhsIdx
     }
 }
 
@@ -141,10 +143,15 @@ struct CleanItem: Identifiable, Equatable {
     /// Returns false for diagnostic items and rules with `manualOnly` delete strategy.
     var isCleanable: Bool {
         if category == .diagnostic { return false }
-        if let ruleId = ruleId, let rule = RuleRegistry.all.first(where: { $0.id == ruleId }) {
+        if let ruleId = ruleId, let rule = RuleRegistry.byId[ruleId] {
             return rule.deleteStrategy != .manualOnly
         }
         return true
+    }
+
+    var rule: CleanRule? {
+        guard let ruleId else { return nil }
+        return RuleRegistry.byId[ruleId]
     }
 }
 
@@ -166,7 +173,7 @@ struct ScanResult: Equatable {
     /// Human-readable rule title, looked up from the registry
     var ruleTitle: String? {
         guard let id = ruleId else { return nil }
-        return RuleRegistry.all.first { $0.id == id }?.title
+        return RuleRegistry.byId[id]?.title
     }
 }
 
@@ -238,9 +245,17 @@ struct CleanRule: Identifiable, Equatable {
 
 /// Aggregate of items belonging to one app, within one rule.
 struct AppGroup: Identifiable {
-    let id = UUID()
+    let id: String
     let appName: String
     let items: [CleanItem]
+
+    init(appName: String, items: [CleanItem]) {
+        let groupKey = items.first?.ruleId ?? items.first.map { "category:\($0.category.rawValue)" } ?? "unknown"
+        self.id = "\(groupKey)|\(appName)"
+        self.appName = appName
+        self.items = items
+    }
+
     var totalSize: Int64 { items.reduce(0) { $0 + $1.size } }
     var fileCount: Int { items.count }
     var ids: Set<UUID> { Set(items.map { $0.id }) }
@@ -248,9 +263,14 @@ struct AppGroup: Identifiable {
 
 /// Aggregate of rules (or categories) containing app-level groups.
 struct RuleGroup: Identifiable {
-    let id = UUID()
+    let id: String
+    let ruleId: String?
     let title: String
     let apps: [AppGroup]
+    var rule: CleanRule? {
+        guard let ruleId else { return nil }
+        return RuleRegistry.byId[ruleId]
+    }
     var totalSize: Int64 { apps.reduce(0) { $0 + $1.totalSize } }
     var fileCount: Int { apps.reduce(0) { $0 + $1.fileCount } }
     var allIds: Set<UUID> { apps.reduce(into: Set()) { $0.formUnion($1.ids) } }
@@ -269,8 +289,11 @@ struct TierGroup: Identifiable {
 extension ScanSummary {
     /// Build the 3-level aggregation: Tier → Rule → App
     func buildTierGroups() -> [TierGroup] {
-        let allItems = results.flatMap { $0.items }.filter { $0.category != .trash }
+        let allItems = results.flatMap { $0.items }.filter {
+            $0.category != .trash && $0.category != .diagnostic
+        }
         let trashItems = results.flatMap { $0.items }.filter { $0.category == .trash }
+        let diagnosticItems = results.flatMap { $0.items }.filter { $0.category == .diagnostic }
 
         var tierMap: [RiskLevel: [CleanItem]] = [:]
         for item in allItems {
@@ -289,23 +312,28 @@ extension ScanSummary {
         // Append trash as a separate tier (always safe)
         if !trashItems.isEmpty {
             let trashApps = buildAppGroups(from: trashItems)
-            let trashRule = RuleGroup(title: "废纸篓", apps: trashApps)
+            let trashRule = RuleGroup(id: "trash", ruleId: "trash", title: "废纸篓", apps: trashApps)
             groups.append(TierGroup(id: "trash", riskLevel: .safe, rules: [trashRule]))
+        }
+
+        if !diagnosticItems.isEmpty {
+            let rules = buildRuleGroups(from: diagnosticItems)
+            groups.append(TierGroup(id: "diagnostic", riskLevel: .danger, rules: rules))
         }
 
         return groups
     }
 
     private func buildRuleGroups(from items: [CleanItem]) -> [RuleGroup] {
-        // Group by rule title (from ruleId → RuleRegistry lookup), fallback to category
-        var dict: [String: [CleanItem]] = [:]
-        for item in items {
-            let key = item.ruleId.flatMap { id in RuleRegistry.all.first(where: { $0.id == id })?.title }
-                ?? item.category.displayName
-            dict[key, default: []].append(item)
+        // Group by stable rule id, fallback to category.
+        let dict = Dictionary(grouping: items) { item in
+            item.ruleId ?? "category:\(item.category.rawValue)"
         }
-        return dict.map { (title, ruleItems) in
-            RuleGroup(title: title, apps: buildAppGroups(from: ruleItems))
+
+        return dict.map { (key, ruleItems) in
+            let rule = RuleRegistry.byId[key]
+            let title = rule?.title ?? ruleItems.first?.category.displayName ?? key
+            return RuleGroup(id: key, ruleId: rule?.id, title: title, apps: buildAppGroups(from: ruleItems))
         }.sorted { $0.title < $1.title }
     }
 

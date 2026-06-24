@@ -51,6 +51,10 @@ final class CleanManager {
         var errors: [String] = []
 
         for item in items {
+            guard item.isCleanable else {
+                errors.append("\(item.name): 此项不支持自动清理，已跳过")
+                continue
+            }
             do {
                 try fileManager.removeItem(atPath: item.path)
                 freedSize += item.size
