@@ -355,7 +355,7 @@ extension ScanSummary {
             let rIds = apps.reduce(into: Set<UUID>()) { $0.formUnion($1.ids) }
             return RuleGroup(id: key, ruleId: rule?.id, title: title, apps: apps,
                              totalSize: rSize, fileCount: rCount, allIds: rIds)
-        }.sorted { $0.title < $1.title }
+        }.sorted { $0.totalSize > $1.totalSize }
     }
 
     private func buildAppGroups(from items: [CleanItem]) -> [AppGroup] {
