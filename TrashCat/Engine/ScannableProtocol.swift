@@ -17,9 +17,27 @@ protocol Scannable: AnyObject {
 
 enum ScanState: Equatable {
     case idle
-    case scanning(currentCategory: String, progress: Double) // 0.0~1.0
+    case scanning(currentCategory: String, progress: Double, filesScanned: Int, filesFound: Int)
     case completed(ScanSummary)
     case error(String)
+
+    // Backward-compatible accessors
+    var categoryText: String {
+        if case .scanning(let cat, _, _, _) = self { return cat }
+        return ""
+    }
+    var progressValue: Double {
+        if case .scanning(_, let p, _, _) = self { return p }
+        return 0
+    }
+    var filesScanned: Int {
+        if case .scanning(_, _, let s, _) = self { return s }
+        return 0
+    }
+    var filesFound: Int {
+        if case .scanning(_, _, _, let f) = self { return f }
+        return 0
+    }
 }
 
 // MARK: - Scan Coordinator
@@ -48,15 +66,13 @@ final class ScanCoordinator: ObservableObject {
     func startScan() {
         scanTask?.cancel()
 
-        state = .scanning(currentCategory: "准备扫描...", progress: 0)
+        state = .scanning(currentCategory: "准备扫描...", progress: 0, filesScanned: 0, filesFound: 0)
 
-        // Fire-and-forget: scanning runs in background, state updates on MainActor.
-        // No await — the caller returns immediately.
         scanTask = Task { [scanners] in
             let total = Double(scanners.count)
             let startTime = Date()
 
-            // Offload heavy I/O to the cooperative thread pool
+            // Update progress as each scanner completes
             let results = await withTaskGroup(
                 of: (Int, ScanResult?).self
             ) { group in
@@ -77,12 +93,29 @@ final class ScanCoordinator: ObservableObject {
 
                 var collected: [(Int, ScanResult)] = []
                 var completedCount = 0
+                var totalFilesFound = 0
 
                 for await (index, maybeResult) in group {
                     completedCount += 1
+                    let prog = Double(completedCount) / total
                     if let result = maybeResult {
+                        totalFilesFound += result.items.count
                         collected.append((index, result))
                     }
+
+                    // Live progress update
+                    let label = completedCount < scanners.count
+                        ? scanners[min(completedCount, scanners.count - 1)].progressLabel
+                        : "收尾中..."
+                    await MainActor.run {
+                        self.state = .scanning(
+                            currentCategory: label,
+                            progress: prog,
+                            filesScanned: completedCount,
+                            filesFound: totalFilesFound
+                        )
+                    }
+
                     if Task.isCancelled { break }
                 }
 

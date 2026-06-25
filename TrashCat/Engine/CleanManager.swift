@@ -10,9 +10,10 @@ final class CleanManager {
         var freedSize: Int64 = 0
         var freedCount = 0
         var errors: [String] = []
+        var catSizes: [CleanCategory: Int64] = [:]
+        var catCounts: [CleanCategory: Int] = [:]
 
         for item in items {
-            // Safety net: skip items that are not cleanable (diagnostic / manualOnly)
             guard item.isCleanable else {
                 errors.append("\(item.name): 此项不支持自动清理，已跳过")
                 continue
@@ -21,17 +22,24 @@ final class CleanManager {
                 try await moveToTrash(path: item.path)
                 freedSize += item.size
                 freedCount += 1
+                catSizes[item.category, default: 0] += item.size
+                catCounts[item.category, default: 0] += 1
             } catch {
                 errors.append("\(item.name): \(error.localizedDescription)")
             }
         }
 
         let duration = Date().timeIntervalSince(startTime)
+        let breakdown = catSizes.map { (cat, size) in
+            (cat, size, catCounts[cat] ?? 0)
+        }.sorted { $0.1 > $1.1 }
+
         return CleanResult(
             freedSize: freedSize,
             freedFileCount: freedCount,
             duration: duration,
-            errors: errors
+            errors: errors,
+            categoryBreakdown: breakdown
         )
     }
 

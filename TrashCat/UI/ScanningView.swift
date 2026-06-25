@@ -50,6 +50,8 @@ private struct MouseWalk {
 struct ScanningView: View {
     let category: String
     let progress: Double
+    let filesScanned: Int
+    let filesFound: Int
     let onCancel: () -> Void
 
     @State private var catPos = CGPoint.zero
@@ -98,13 +100,22 @@ struct ScanningView: View {
             .frame(height: 150)
             .padding(.horizontal, 8)
 
-            // ── Catch counter ──
-            if caughtCount > 0 {
-                Text("已捕获 \(caughtCount) 只老鼠")
-                    .font(.caption2)
-                    .foregroundColor(.orange)
-                    .transition(.opacity)
-                    .animation(.easeInOut, value: caughtCount)
+            // ── Catch counter + file stats ──
+            if caughtCount > 0 || filesFound > 0 {
+                VStack(spacing: 2) {
+                    if caughtCount > 0 {
+                        Text("已捕获 \(caughtCount) 只老鼠")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                    if filesFound > 0 {
+                        Text("已发现 \(filesFound) 个文件")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .transition(.opacity)
+                .animation(.easeInOut, value: caughtCount)
             }
 
             // ── Progress bar ──
@@ -119,6 +130,11 @@ struct ScanningView: View {
                 Text("\(category)\(dots)")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                if filesScanned > 0 {
+                    Text("\(filesScanned) / ? 个目录已扫描")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
             }
             .onReceive(dotsTimer) { _ in
                 dots = dots.count >= 3 ? "" : dots + "."

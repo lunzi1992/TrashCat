@@ -203,6 +203,7 @@ struct CleanResult {
     let freedFileCount: Int
     let duration: TimeInterval
     let errors: [String]
+    var categoryBreakdown: [(CleanCategory, Int64, Int)] = []
 
     var isSuccess: Bool {
         errors.isEmpty
