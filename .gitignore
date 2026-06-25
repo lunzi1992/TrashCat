@@ -23,3 +23,6 @@ Thumbs.db
 # Project
 .workbuddy/
 .build/
+TrashCat-0.3.0.dmg
+*.dmg
+.dmg-staging/

@@ -57,6 +57,12 @@
 
 > 从 [Releases](https://github.com/lunzi1992/TrashCat/releases) 页面下载最新 `.dmg`，拖进 Applications 即可。
 
+**首次打开**：因为 TrashCat 没有付费开发者签名，macOS 会提示"无法验证开发者"。解决方法：
+- **方法 1**：右键点击 TrashCat →「打开」→「打开」
+- **方法 2**：终端执行 `xattr -cr /Applications/TrashCat.app`
+
+这是开源软件的常见情况，TrashCat 100% 本地运行，不会联网，代码全部公开可审计。
+
 ### 自己编译
 
 ```bash
