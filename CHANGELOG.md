@@ -85,6 +85,48 @@ TrashCat/
 
 ---
 
+## [0.3.0] — 2026-06-25 — P0 冲刺：DMG 分发 + 进度反馈 + 测试 + 报告升级
+
+### 📦 DMG 分发
+
+- **一键打包脚本** `scripts/build-dmg.sh`，产出 `TrashCat-{version}.dmg`（2.2MB）
+- Ad-hoc 签名（无需付费 Apple Developer 账号）
+- 拖拽安装 DMG（含 /Applications 快捷方式）
+- README 补充 Gatekeeper 绕过说明（右键→打开 / `xattr -cr`）
+
+### 📡 扫描进度实时反馈
+
+- `ScanState` 新增 `filesScanned` + `filesFound` 字段
+- 每个扫描器完成后实时更新进度
+- ScanningView 显示"已发现 N 个文件"+"N / ? 个目录已扫描"
+- 进度条反映实际扫描器完成比例
+
+### 📊 清理报告升级
+
+- `CleanResult` 新增 `categoryBreakdown`（按分类统计释放空间和文件数）
+- CleanReportView 按分类展示明细表（图标 + 文件数 + 大小）
+- 新增"打开废纸篓"按钮，一键跳转恢复
+- 显示清理耗时
+
+### 🧪 单元测试补齐
+
+新增 4 个测试文件，59 个断言，覆盖率翻倍：
+
+| 文件 | 断言数 | 覆盖范围 |
+|------|:------:|---------|
+| RuleRegistryTests | 16 | 注册表完整性、风险一致性、关键规则存在性 |
+| CleanItemTests | 18 | isCleanable、riskLevel、聚合模型、TierGroup 构建 |
+| OrphanScannerTests | 10 | bundle ID 匹配、系统前缀过滤、orphan reason |
+| ScanPolicyAdvancedTests | 15 | blocklist 边界、路径分类、显示名/解释 |
+
+### 📝 文档
+
+- README 功能列表更新（实时进度、清理报告明细）
+- README 新增 DMG 打包说明（`./scripts/build-dmg.sh`）
+- README 猫窝结构补充 scripts/ 和 deliverables/
+
+---
+
 ## [0.2.1] — 2026-06-25 — 性能优化 + UI 打磨
 
 ### ⚡ 展开/折叠秒开

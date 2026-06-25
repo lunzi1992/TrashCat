@@ -48,31 +48,42 @@
 - 🪹 **闻老鼠窝（空间诊断）**——找出 iOS 备份、Xcode 归档、Docker、聊天软件等大块占用
 - 🧭 **帮你判断**——按「推荐清理 / 需要确认 / 谨慎处理」三层风险展示，每项标注影响说明
 - 🎮 **猫捉老鼠动画**——扫描时 🐱 追 🐭 的 Canvas 动画，"已捕获 X 只老鼠"
+- 📡 **实时进度**——扫描时显示已扫描目录数、已发现文件数，进度条同步更新
 - ⚡ **并发扫描**——TaskGroup 并行，速度提升 2-3x，随时可取消
-- 📊 **交差（清理报告）**——清楚地告诉你移动了什么、释放了多少空间
+- 📊 **交差（清理报告）**——按分类展示释放明细，一键打开废纸篓恢复文件
+- 🔒 **100% 本地**——不上传任何数据，不联网，不开后门，代码全开源
 
 ## 📦 领养一只 TrashCat
 
 ### 下载 DMG
 
-> 从 [Releases](https://github.com/lunzi1992/TrashCat/releases) 页面下载最新 `.dmg`，拖进 Applications 即可。
+> 从 [Releases](https://github.com/lunzi1992/TrashCat/releases) 页面下载最新 `.dmg`，双击挂载后拖进 Applications。
 
-**首次打开**：因为 TrashCat 没有付费开发者签名，macOS 会提示"无法验证开发者"。解决方法：
+**首次打开**：TrashCat 是开源软件，没有付费开发者签名，macOS 会提示"无法验证开发者"。这不是安全问题——解决方法：
 - **方法 1**：右键点击 TrashCat →「打开」→「打开」
 - **方法 2**：终端执行 `xattr -cr /Applications/TrashCat.app`
 
-这是开源软件的常见情况，TrashCat 100% 本地运行，不会联网，代码全部公开可审计。
+TrashCat 100% 本地运行，不联网，代码全公开可审计。
 
 ### 自己编译
 
 ```bash
 git clone https://github.com/lunzi1992/TrashCat.git
-cd trashcat
+cd TrashCat
 open TrashCat.xcodeproj
 # Xcode → Product → Archive
 ```
 
-**系统要求**：macOS 13 (Ventura) 以上，给猫一个干净的新家。
+**或者一行命令打 DMG**：
+
+```bash
+git clone https://github.com/lunzi1992/TrashCat.git
+cd TrashCat
+./scripts/build-dmg.sh 0.3.0
+# 产出 TrashCat-0.3.0.dmg
+```
+
+**系统要求**：macOS 13 (Ventura) 以上。
 
 ## 🛠 这只猫什么构造
 
@@ -82,7 +93,7 @@ open TrashCat.xcodeproj
 | 皮毛 | SwiftUI |
 | 神经 | MVVM |
 | 地盘 | macOS 13 Ventura+ |
-| 外包装 | DMG + Apple 公证 |
+| 外包装 | DMG（ad-hoc 签名） |
 | 血缘 | 纯 Apple 框架，零外部依赖 |
 
 ## 🏗 猫窝结构
@@ -103,12 +114,15 @@ trashcat/
 │       ├── FileCategorizer.swift
 │       ├── ScanPolicy.swift
 │       └── PermissionManager.swift
-├── TrashCatTests/               # 猫的体检报告
+├── TrashCatTests/               # 猫的体检报告（6 个测试文件，120+ 断言）
 ├── Resources/                   # 猫粮（图标）
-└── docs/                        # 猫的档案
+├── scripts/                     # 打包脚本（build-dmg.sh）
+├── docs/                        # 猫的档案
     ├── prd.md
     ├── scan-policy.md
-    └── competitive-analysis.md
+    ├── competitive-analysis.md
+    └── development-plan.md
+└── deliverables/                # 产品评估报告
 ```
 
 ## 🔒 猫的品格
