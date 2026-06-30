@@ -1,15 +1,296 @@
 import SwiftUI
 import AppKit
+import Combine
 
-// MARK: - Tier Card (own @State for expansion — isolates re-rendering)
+// MARK: - Selection Store
+
+private enum SelectionVisualState: Equatable {
+    case locked
+    case empty
+    case partial
+    case full
+}
+
+@MainActor
+private final class SelectionStore: ObservableObject {
+    private let sizeOf: [UUID: Int64]
+    private let riskOf: [UUID: RiskLevel]
+    private let cleanableIDs: Set<UUID>
+    private let recommendedIDs: Set<UUID>
+    private let groupIDs: [String: Set<UUID>]
+    private let groupTotals: [String: Int]
+    private let itemGroups: [UUID: [String]]
+
+    private var unsafeCount = 0
+    private var groupSelectedCounts: [String: Int] = [:]
+
+    private(set) var selectedIDs: Set<UUID> = []
+    private(set) var selectedSize: Int64 = 0
+    private(set) var selectedCount = 0
+    private(set) var riskCounts: [RiskLevel: Int] = [:]
+    @Published private(set) var epoch = 0
+
+    init(items: [CleanItem], tierGroups: [TierGroup], nonCleanableIDs: Set<UUID>) {
+        var sizes: [UUID: Int64] = [:]
+        var risks: [UUID: RiskLevel] = [:]
+        var cleanable = Set<UUID>()
+        var recommended = Set<UUID>()
+
+        for item in items {
+            sizes[item.id] = item.size
+            let risk = item.riskLevel
+            risks[item.id] = risk
+
+            if item.isCleanable {
+                cleanable.insert(item.id)
+                if risk == .safe && item.category != .trash {
+                    recommended.insert(item.id)
+                }
+            }
+        }
+
+        var groups: [String: Set<UUID>] = [:]
+        var totals: [String: Int] = [:]
+        var memberships: [UUID: [String]] = [:]
+
+        func registerGroup(_ key: String, ids rawIDs: Set<UUID>) {
+            let ids = rawIDs.subtracting(nonCleanableIDs).filter { cleanable.contains($0) }
+            groups[key] = Set(ids)
+            totals[key] = ids.count
+            for id in ids {
+                memberships[id, default: []].append(key)
+            }
+        }
+
+        for tier in tierGroups {
+            registerGroup(Self.tierKey(tier.id), ids: tier.allIds)
+            for rule in tier.rules {
+                registerGroup(Self.ruleKey(rule.id), ids: rule.allIds)
+                for app in rule.apps {
+                    registerGroup(Self.appKey(app.id), ids: app.ids)
+                }
+            }
+        }
+
+        self.sizeOf = sizes
+        self.riskOf = risks
+        self.cleanableIDs = cleanable
+        self.recommendedIDs = recommended
+        self.groupIDs = groups
+        self.groupTotals = totals
+        self.itemGroups = memberships
+
+        let defaultIDs = items.compactMap { item -> UUID? in
+            guard cleanable.contains(item.id),
+                  risks[item.id]?.defaultSelected == true else { return nil }
+            return item.id
+        }
+        applyInitialSelection(Set(defaultIDs))
+    }
+
+    static func tierKey(_ id: String) -> String { "tier:\(id)" }
+    static func ruleKey(_ id: String) -> String { "rule:\(id)" }
+    static func appKey(_ id: String) -> String { "app:\(id)" }
+
+    var hasSelection: Bool { selectedCount > 0 }
+    var hasUnsafeSelection: Bool { unsafeCount > 0 }
+    var hasRecommendedSelection: Bool { !recommendedIDs.isEmpty }
+    var isRecommendedSelection: Bool { selectedIDs == recommendedIDs }
+
+    var selectedByRisk: [(RiskLevel, Int)] {
+        [RiskLevel.safe, .caution, .danger].compactMap { level in
+            guard let count = riskCounts[level], count > 0 else { return nil }
+            return (level, count)
+        }
+    }
+
+    func contains(_ id: UUID) -> Bool {
+        selectedIDs.contains(id)
+    }
+
+    func state(forGroup key: String) -> SelectionVisualState {
+        let total = groupTotals[key] ?? 0
+        guard total > 0 else { return .locked }
+
+        let count = groupSelectedCounts[key] ?? 0
+        if count == 0 { return .empty }
+        if count == total { return .full }
+        return .partial
+    }
+
+    func state(forItem id: UUID) -> SelectionVisualState {
+        guard cleanableIDs.contains(id) else { return .locked }
+        return selectedIDs.contains(id) ? .full : .empty
+    }
+
+    @discardableResult
+    func toggleGroup(_ key: String) -> SelectionVisualState {
+        let ids = groupIDs[key] ?? []
+        guard !ids.isEmpty else { return .locked }
+
+        if state(forGroup: key) == .full {
+            mutate { ids.forEach { set($0, selected: false) } }
+        } else {
+            mutate { ids.forEach { set($0, selected: true) } }
+        }
+        return state(forGroup: key)
+    }
+
+    @discardableResult
+    func toggleItem(_ id: UUID) -> SelectionVisualState {
+        guard cleanableIDs.contains(id) else { return .locked }
+
+        mutate {
+            set(id, selected: !selectedIDs.contains(id))
+        }
+        return state(forItem: id)
+    }
+
+    func selectRecommended() {
+        replaceSelection(with: recommendedIDs)
+    }
+
+    func clear() {
+        replaceSelection(with: [])
+    }
+
+    private func replaceSelection(with ids: Set<UUID>) {
+        mutate {
+            let target = ids.intersection(cleanableIDs)
+            for id in selectedIDs.subtracting(target) {
+                set(id, selected: false)
+            }
+            for id in target.subtracting(selectedIDs) {
+                set(id, selected: true)
+            }
+        }
+    }
+
+    private func applyInitialSelection(_ ids: Set<UUID>) {
+        for id in ids {
+            set(id, selected: true)
+        }
+    }
+
+    private func mutate(_ changes: () -> Void) {
+        changes()
+        epoch += 1
+    }
+
+    private func set(_ id: UUID, selected: Bool) {
+        if selected {
+            guard cleanableIDs.contains(id), selectedIDs.insert(id).inserted else { return }
+            selectedSize += sizeOf[id] ?? 0
+            selectedCount += 1
+
+            let risk = riskOf[id] ?? .safe
+            riskCounts[risk, default: 0] += 1
+            if risk != .safe { unsafeCount += 1 }
+
+            for key in itemGroups[id] ?? [] {
+                groupSelectedCounts[key, default: 0] += 1
+            }
+        } else {
+            guard selectedIDs.remove(id) != nil else { return }
+            selectedSize -= sizeOf[id] ?? 0
+            selectedCount -= 1
+
+            let risk = riskOf[id] ?? .safe
+            riskCounts[risk, default: 0] -= 1
+            if riskCounts[risk] == 0 { riskCounts.removeValue(forKey: risk) }
+            if risk != .safe { unsafeCount -= 1 }
+
+            for key in itemGroups[id] ?? [] {
+                groupSelectedCounts[key, default: 0] -= 1
+                if groupSelectedCounts[key] == 0 {
+                    groupSelectedCounts.removeValue(forKey: key)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Selection Icons
+
+private struct GroupSelectionIcon: View {
+    let groupKey: String
+    let selection: SelectionStore
+    let epoch: Int
+    let size: CGFloat
+
+    @State private var visual: SelectionVisualState = .empty
+
+    var body: some View {
+        selectionButton(visual: visual, size: size) {
+            visual = selection.toggleGroup(groupKey)
+        }
+        .onAppear { sync() }
+        .onChange(of: epoch) { _ in sync() }
+    }
+
+    private func sync() {
+        visual = selection.state(forGroup: groupKey)
+    }
+}
+
+private struct ItemSelectionIcon: View {
+    let itemID: UUID
+    let selection: SelectionStore
+    let epoch: Int
+
+    @State private var visual: SelectionVisualState = .empty
+
+    var body: some View {
+        selectionButton(visual: visual, size: 10) {
+            visual = selection.toggleItem(itemID)
+        }
+        .onAppear { sync() }
+        .onChange(of: epoch) { _ in sync() }
+    }
+
+    private func sync() {
+        visual = selection.state(forItem: itemID)
+    }
+}
+
+@ViewBuilder
+private func selectionButton(
+    visual: SelectionVisualState,
+    size: CGFloat,
+    action: @escaping () -> Void
+) -> some View {
+    switch visual {
+    case .locked:
+        Image(systemName: "lock")
+            .font(.system(size: size))
+            .foregroundColor(.secondary.opacity(0.7))
+            .frame(width: 18)
+    case .empty, .partial, .full:
+        Button(action: action) {
+            Image(systemName: iconName(for: visual))
+                .font(.system(size: size))
+                .foregroundColor(visual == .full ? .accentColor : .secondary)
+                .frame(width: 18)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private func iconName(for visual: SelectionVisualState) -> String {
+    switch visual {
+    case .locked: return "lock"
+    case .empty: return "square"
+    case .partial: return "minus.square"
+    case .full: return "checkmark.square.fill"
+    }
+}
+
+// MARK: - Tier Card
 
 private struct TierCard: View {
     let tier: TierGroup
-    let nonCleanableIDs: Set<UUID>
-    let cleanableIDs: Set<UUID>
-    @Binding var selectedItems: Set<UUID>
-    let addIDs: (Set<UUID>) -> Void
-    let removeIDs: (Set<UUID>) -> Void
+    let selection: SelectionStore
+    let epoch: Int
 
     @State private var isExpanded = false
 
@@ -17,39 +298,38 @@ private struct TierCard: View {
     private let title: String
     private let icon: String
     private let explanation: String
+    private let groupKey: String
 
-    init(tier: TierGroup, nonCleanableIDs: Set<UUID>, selectedItems: Binding<Set<UUID>>,
-         addIDs: @escaping (Set<UUID>) -> Void, removeIDs: @escaping (Set<UUID>) -> Void) {
+    init(tier: TierGroup, selection: SelectionStore, epoch: Int) {
         self.tier = tier
-        self.nonCleanableIDs = nonCleanableIDs
-        self.cleanableIDs = tier.allIds.subtracting(nonCleanableIDs)
-        self._selectedItems = selectedItems
-        self.addIDs = addIDs
-        self.removeIDs = removeIDs
+        self.selection = selection
+        self.epoch = epoch
+        self.groupKey = SelectionStore.tierKey(tier.id)
 
         switch tier.id {
         case "diagnostic":
-            tint = .blue; icon = "magnifyingglass.circle"; title = "空间诊断"
+            tint = .blue
+            icon = "magnifyingglass.circle"
+            title = "空间诊断"
             explanation = "这些是占用空间较大的用户数据或开发数据，只用于定位来源，不会被 TrashCat 自动清理。"
         case "trash":
-            tint = .green; icon = "trash"; title = "废纸篓"
+            tint = .green
+            icon = "trash"
+            title = "废纸篓"
             explanation = "这些项目已经在废纸篓中，清理后会进入系统废纸篓处理流程。"
         default:
-            tint = tier.riskLevel.tint; icon = tier.riskLevel.iconName
-            title = tier.riskLevel.displayName; explanation = tier.riskLevel.explanation
+            tint = tier.riskLevel.tint
+            icon = tier.riskLevel.iconName
+            title = tier.riskLevel.displayName
+            explanation = tier.riskLevel.explanation
         }
     }
 
     var body: some View {
-        let hasCleanable = !cleanableIDs.isEmpty
-        let allSel = hasCleanable && cleanableIDs.isSubset(of: selectedItems)
-        let someSel = !cleanableIDs.isDisjoint(with: selectedItems)
-
         VStack(spacing: 0) {
             Button(action: { isExpanded.toggle() }) {
                 HStack(spacing: 10) {
-                    SelIcon(ids: cleanableIDs, allSel: allSel, someSel: someSel,
-                            addIDs: addIDs, removeIDs: removeIDs, size: 18)
+                    GroupSelectionIcon(groupKey: groupKey, selection: selection, epoch: epoch, size: 18)
                     Image(systemName: icon).foregroundColor(tint)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(title).font(.headline)
@@ -76,9 +356,7 @@ private struct TierCard: View {
                         .padding(.horizontal, 12).padding(.top, 4)
 
                     ForEach(tier.rules) { rule in
-                        RuleRow(rule: rule, nonCleanableIDs: nonCleanableIDs,
-                                selectedItems: $selectedItems, tint: tint,
-                                addIDs: addIDs, removeIDs: removeIDs)
+                        RuleRow(rule: rule, selection: selection, epoch: epoch, tint: tint)
                     }
                 }.padding(.bottom, 8)
             }
@@ -90,40 +368,24 @@ private struct TierCard: View {
 
 private struct RuleRow: View {
     let rule: RuleGroup
-    let cleanableIDs: Set<UUID>
-    let nonCleanableIDs: Set<UUID>
-    @Binding var selectedItems: Set<UUID>
-    let addIDs: (Set<UUID>) -> Void
-    let removeIDs: (Set<UUID>) -> Void
+    let selection: SelectionStore
+    let epoch: Int
     let tint: Color
 
     @State private var isExpanded = false
 
-    init(rule: RuleGroup, nonCleanableIDs: Set<UUID>, selectedItems: Binding<Set<UUID>>,
-         tint: Color, addIDs: @escaping (Set<UUID>) -> Void, removeIDs: @escaping (Set<UUID>) -> Void) {
-        self.rule = rule
-        self.cleanableIDs = rule.allIds.subtracting(nonCleanableIDs)
-        self.nonCleanableIDs = nonCleanableIDs
-        self._selectedItems = selectedItems
-        self.tint = tint
-        self.addIDs = addIDs
-        self.removeIDs = removeIDs
-    }
+    private var groupKey: String { SelectionStore.ruleKey(rule.id) }
+    private var isDiagnosticOnly: Bool { selection.state(forGroup: groupKey) == .locked }
 
     var body: some View {
-        let hasCleanable = !cleanableIDs.isEmpty
-        let allSel = hasCleanable && cleanableIDs.isSubset(of: selectedItems)
-        let someSel = !cleanableIDs.isDisjoint(with: selectedItems)
-
         VStack(spacing: 0) {
             Button(action: { isExpanded.toggle() }) {
                 HStack(spacing: 8) {
-                    SelIcon(ids: cleanableIDs, allSel: allSel, someSel: someSel,
-                            addIDs: addIDs, removeIDs: removeIDs, size: 13)
+                    GroupSelectionIcon(groupKey: groupKey, selection: selection, epoch: epoch, size: 13)
                     Circle().fill(tint).frame(width: 6, height: 6)
                     Text(rule.title).font(.callout).fontWeight(.medium)
                     Spacer()
-                    if cleanableIDs.isEmpty {
+                    if isDiagnosticOnly {
                         Text("仅诊断").font(.caption2).foregroundColor(.orange).padding(.horizontal, 4)
                     }
                     Text("\(rule.apps.count) 个应用").font(.caption).foregroundColor(.secondary)
@@ -137,9 +399,7 @@ private struct RuleRow: View {
                 VStack(spacing: 2) {
                     ruleGuidance
                     ForEach(rule.apps) { app in
-                        AppRow(app: app, nonCleanableIDs: nonCleanableIDs,
-                               selectedItems: $selectedItems, tint: tint,
-                               addIDs: addIDs, removeIDs: removeIDs)
+                        AppRow(app: app, selection: selection, epoch: epoch)
                     }
                 }.padding(.bottom, 4)
             }
@@ -180,40 +440,22 @@ private struct RuleRow: View {
 
 private struct AppRow: View {
     let app: AppGroup
-    let cleanableIDs: Set<UUID>
-    let nonCleanableIDs: Set<UUID>
-    @Binding var selectedItems: Set<UUID>
-    let addIDs: (Set<UUID>) -> Void
-    let removeIDs: (Set<UUID>) -> Void
-    let tint: Color
+    let selection: SelectionStore
+    let epoch: Int
 
     @State private var showFiles = false
 
     private let maxPreview = 15
-
-    init(app: AppGroup, nonCleanableIDs: Set<UUID>, selectedItems: Binding<Set<UUID>>,
-         tint: Color, addIDs: @escaping (Set<UUID>) -> Void, removeIDs: @escaping (Set<UUID>) -> Void) {
-        self.app = app
-        self.cleanableIDs = app.ids.subtracting(nonCleanableIDs)
-        self.nonCleanableIDs = nonCleanableIDs
-        self._selectedItems = selectedItems
-        self.tint = tint
-        self.addIDs = addIDs
-        self.removeIDs = removeIDs
-    }
+    private var groupKey: String { SelectionStore.appKey(app.id) }
+    private var isDiagnosticOnly: Bool { selection.state(forGroup: groupKey) == .locked }
 
     var body: some View {
-        let hasCleanable = !cleanableIDs.isEmpty
-        let allSel = hasCleanable && cleanableIDs.isSubset(of: selectedItems)
-        let someSel = !cleanableIDs.isDisjoint(with: selectedItems)
-
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                SelIcon(ids: cleanableIDs, allSel: allSel, someSel: someSel,
-                        addIDs: addIDs, removeIDs: removeIDs, size: 12)
+                GroupSelectionIcon(groupKey: groupKey, selection: selection, epoch: epoch, size: 12)
                 Text(app.appName).font(.caption).fontWeight(.medium).lineLimit(1)
                 Spacer()
-                if cleanableIDs.isEmpty {
+                if isDiagnosticOnly {
                     Text("仅诊断").font(.caption2).foregroundColor(.orange)
                 }
                 Text("\(app.fileCount) 个文件").font(.caption2).foregroundColor(.secondary)
@@ -235,28 +477,7 @@ private struct AppRow: View {
             if showFiles {
                 VStack(spacing: 0) {
                     ForEach(app.items.prefix(maxPreview)) { item in
-                        HStack(spacing: 4) {
-                            Button(action: {
-                                if item.isCleanable {
-                                    if selectedItems.contains(item.id) { removeIDs([item.id]) }
-                                    else { addIDs([item.id]) }
-                                }
-                            }) {
-                                Image(systemName: selectedItems.contains(item.id)
-                                      ? "checkmark.square.fill" : "square")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(selectedItems.contains(item.id) ? .accentColor : .secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(!item.isCleanable)
-                            Text(item.name).font(.caption2).foregroundColor(.secondary)
-                                .lineLimit(1).truncationMode(.middle)
-                            Spacer()
-                            if !item.isCleanable {
-                                Text("仅诊断").font(.caption2).foregroundColor(.orange).padding(.horizontal, 2)
-                            }
-                            Text(item.size.formattedSize).font(.caption2).foregroundColor(.secondary)
-                        }.padding(.horizontal, 44).padding(.vertical, 2)
+                        FileRow(item: item, selection: selection, epoch: epoch)
                     }
                     if app.items.count > maxPreview {
                         Text("...还有 \(app.items.count - maxPreview) 个文件")
@@ -270,33 +491,22 @@ private struct AppRow: View {
     }
 }
 
-// MARK: - Selection Icon (incremental — no O(n) recomputation)
-
-private struct SelIcon: View {
-    let ids: Set<UUID>
-    let allSel: Bool
-    let someSel: Bool
-    let addIDs: (Set<UUID>) -> Void
-    let removeIDs: (Set<UUID>) -> Void
-    let size: CGFloat
+private struct FileRow: View {
+    let item: CleanItem
+    let selection: SelectionStore
+    let epoch: Int
 
     var body: some View {
-        if ids.isEmpty {
-            Image(systemName: "lock")
-                .font(.system(size: size))
-                .foregroundColor(.secondary.opacity(0.7))
-                .frame(width: 18)
-        } else {
-            Button(action: {
-                if allSel { removeIDs(ids) } else { addIDs(ids) }
-            }) {
-                Image(systemName: allSel ? "checkmark.square.fill" :
-                                    someSel ? "minus.square" : "square")
-                    .font(.system(size: size))
-                    .foregroundColor(allSel ? .accentColor : .secondary)
-                    .frame(width: 18)
-            }.buttonStyle(.plain)
-        }
+        HStack(spacing: 4) {
+            ItemSelectionIcon(itemID: item.id, selection: selection, epoch: epoch)
+            Text(item.name).font(.caption2).foregroundColor(.secondary)
+                .lineLimit(1).truncationMode(.middle)
+            Spacer()
+            if !item.isCleanable {
+                Text("仅诊断").font(.caption2).foregroundColor(.orange).padding(.horizontal, 2)
+            }
+            Text(item.size.formattedSize).font(.caption2).foregroundColor(.secondary)
+        }.padding(.horizontal, 44).padding(.vertical, 2)
     }
 }
 
@@ -306,35 +516,33 @@ struct ResultsView: View {
     let summary: ScanSummary
     @ObservedObject var coordinator: ScanCoordinator
 
+    @StateObject private var selection: SelectionStore
     @State private var showConfirmClean = false
     @State private var cleanResult: CleanResult?
     @State private var isCleaning = false
-    @State private var selectedItems: Set<UUID> = []
-    @State private var selectedSize: Int64 = 0
-    @State private var selectedCount: Int = 0
 
-    // Immutable caches
     private let allItems: [CleanItem]
-    private let sizeOf: [UUID: Int64]
     private let tierGroups: [TierGroup]
     private let nonCleanableIDs: Set<UUID>
-    private let safeNonTrashIDs: Set<UUID>
 
     init(summary: ScanSummary, coordinator: ScanCoordinator) {
         self.summary = summary
         self.coordinator = coordinator
+
         let items = summary.results.flatMap { $0.items }
+        let groups = summary.buildTierGroups()
+        let nonCleanable = Set(items.filter { !$0.isCleanable }.map { $0.id })
+
         self.allItems = items
-        self.tierGroups = summary.buildTierGroups()
-
-        var sizeMap: [UUID: Int64] = [:]
-        for item in items { sizeMap[item.id] = item.size }
-        self.sizeOf = sizeMap
-
-        self.nonCleanableIDs = Set(items.filter { !$0.isCleanable }.map { $0.id })
-        self.safeNonTrashIDs = Set(items.filter {
-            $0.riskLevel == .safe && $0.category != .trash && $0.isCleanable
-        }.map { $0.id })
+        self.tierGroups = groups
+        self.nonCleanableIDs = nonCleanable
+        self._selection = StateObject(
+            wrappedValue: SelectionStore(
+                items: items,
+                tierGroups: groups,
+                nonCleanableIDs: nonCleanable
+            )
+        )
     }
 
     var body: some View {
@@ -342,33 +550,8 @@ struct ResultsView: View {
             CleanReportView(result: result) { coordinator.state = .idle }
         } else {
             mainView
-                .onAppear {
-                    let defaults = allItems.filter { $0.defaultSelected && $0.isCleanable }
-                    for item in defaults { addItem(item.id) }
-                }
         }
     }
-
-    // MARK: - Incremental Selection
-
-    private func addItem(_ id: UUID) {
-        guard !selectedItems.contains(id) else { return }
-        selectedItems.insert(id)
-        selectedSize += sizeOf[id] ?? 0
-        selectedCount += 1
-    }
-
-    private func removeItem(_ id: UUID) {
-        guard selectedItems.contains(id) else { return }
-        selectedItems.remove(id)
-        selectedSize -= sizeOf[id] ?? 0
-        selectedCount -= 1
-    }
-
-    private func addIDs(_ ids: Set<UUID>) { for id in ids { addItem(id) } }
-    private func removeIDs(_ ids: Set<UUID>) { for id in ids { removeItem(id) } }
-
-    // MARK: - Main
 
     private var mainView: some View {
         VStack(spacing: 0) {
@@ -376,17 +559,11 @@ struct ResultsView: View {
             Divider()
             ScrollView {
                 if tierGroups.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "sparkles").font(.system(size: 40)).foregroundColor(.green)
-                        Text("你的 Mac 很干净！").font(.headline)
-                        Text("没找到任何垃圾文件，好猫表示很满意。").font(.caption).foregroundColor(.secondary)
-                    }.padding(40)
+                    emptyStateView.padding(40)
                 } else {
                     LazyVStack(spacing: 12) {
                         ForEach(tierGroups) { tier in
-                            TierCard(tier: tier, nonCleanableIDs: nonCleanableIDs,
-                                     selectedItems: $selectedItems,
-                                     addIDs: addIDs, removeIDs: removeIDs)
+                            TierCard(tier: tier, selection: selection, epoch: selection.epoch)
                         }
                     }.padding(12)
                 }
@@ -396,8 +573,6 @@ struct ResultsView: View {
         .frame(minHeight: 500)
         .sheet(isPresented: $showConfirmClean) { confirmSheet }
     }
-
-    // MARK: - Header
 
     private var headerView: some View {
         VStack(spacing: 6) {
@@ -413,9 +588,9 @@ struct ResultsView: View {
             if !summary.isEmpty {
                 HStack(spacing: 24) {
                     VStack {
-                        Text(selectedSize.formattedSize)
+                        Text(selection.selectedSize.formattedSize)
                             .font(.title).fontWeight(.bold).foregroundColor(.orange)
-                        Text("已选 \(selectedCount)/\(summary.totalFileCount) 项")
+                        Text("已选 \(selection.selectedCount)/\(summary.totalFileCount) 项")
                             .font(.caption).foregroundColor(.secondary)
                     }
                 }.padding(.vertical, 2)
@@ -423,27 +598,36 @@ struct ResultsView: View {
         }.padding(.horizontal, 20).padding(.vertical, 14)
     }
 
-    // MARK: - Footer
+    private var emptyStateView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "sparkles").font(.system(size: 40)).foregroundColor(.green)
+            Text("你的 Mac 很干净！").font(.headline)
+            Text("没找到任何垃圾文件，好猫表示很满意。").font(.caption).foregroundColor(.secondary)
+        }
+    }
 
     private var footerView: some View {
         VStack(spacing: 0) {
             Divider()
             HStack {
-                if selectedItems != safeNonTrashIDs && !safeNonTrashIDs.isEmpty {
-                    Button("选择推荐项") { removeIDs(selectedItems); addIDs(safeNonTrashIDs) }
+                if selection.hasRecommendedSelection && !selection.isRecommendedSelection {
+                    Button("选择推荐项") { selection.selectRecommended() }
                         .font(.caption).padding(.leading, 16)
-                } else if !selectedItems.isEmpty {
-                    Button("取消全选") { removeIDs(selectedItems) }.font(.caption).padding(.leading, 16)
-                } else { EmptyView() }
+                } else if selection.hasSelection {
+                    Button("取消全选") { selection.clear() }
+                        .font(.caption).padding(.leading, 16)
+                } else {
+                    EmptyView()
+                }
                 Spacer()
                 Button(action: { showConfirmClean = true }) {
                     HStack(spacing: 6) {
                         Image(systemName: "trash")
-                        Text("\(cleanupLabel) (\(selectedSize.formattedSize))")
+                        Text("\(cleanupLabel) (\(selection.selectedSize.formattedSize))")
                     }.frame(minWidth: 200)
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
-                .disabled(selectedItems.isEmpty || isCleaning)
+                .disabled(!selection.hasSelection || isCleaning)
                 .keyboardShortcut(.return, modifiers: [])
                 .padding(16)
                 Spacer()
@@ -452,34 +636,18 @@ struct ResultsView: View {
     }
 
     private var cleanupLabel: String {
-        // Check if any selected item is caution/danger by just checking a few items
-        for item in allItems where selectedItems.contains(item.id) {
-            if item.riskLevel == .danger || item.riskLevel == .caution {
-                return "确认后清理"
-            }
-        }
-        return "安全清理"
+        selection.hasUnsafeSelection ? "确认后清理" : "安全清理"
     }
 
-    // MARK: - Confirm
-
     private var confirmSheet: some View {
-        let byRisk: [(RiskLevel, Int)] = {
-            var map: [RiskLevel: Int] = [:]
-            for item in allItems where selectedItems.contains(item.id) {
-                map[item.riskLevel, default: 0] += 1
-            }
-            return [RiskLevel.safe, .caution, .danger].compactMap { level in
-                map[level].map { (level, $0) }
-            }
-        }()
+        let byRisk = selection.selectedByRisk
 
         return VStack(spacing: 16) {
             Image(systemName: "trash.fill").font(.system(size: 40)).foregroundColor(.orange)
             Text("确认清理？").font(.title2).fontWeight(.bold)
             VStack(spacing: 2) {
-                Text("将移动 \(selectedCount) 个文件到废纸篓")
-                Text("共释放 \(selectedSize.formattedSize) 空间")
+                Text("将移动 \(selection.selectedCount) 个文件到废纸篓")
+                Text("共释放 \(selection.selectedSize.formattedSize) 空间")
                     .foregroundColor(.orange).fontWeight(.medium)
             }.font(.body).multilineTextAlignment(.center)
 
@@ -513,7 +681,8 @@ struct ResultsView: View {
 
     private func performClean() {
         isCleaning = true
-        let cleanable = allItems.filter { selectedItems.contains($0.id) && $0.isCleanable }
+        let selectedIDs = selection.selectedIDs
+        let cleanable = allItems.filter { selectedIDs.contains($0.id) && $0.isCleanable }
         Task {
             let result = await CleanManager().clean(items: cleanable)
             await MainActor.run { isCleaning = false; cleanResult = result }

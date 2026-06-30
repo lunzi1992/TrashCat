@@ -59,9 +59,17 @@
 
 > 从 [Releases](https://github.com/lunzi1992/TrashCat/releases) 页面下载最新 `.dmg`，双击挂载后拖进 Applications。
 
-**首次打开**：TrashCat 是开源软件，没有付费开发者签名，macOS 会提示"无法验证开发者"。这不是安全问题——解决方法：
-- **方法 1**：右键点击 TrashCat →「打开」→「打开」
-- **方法 2**：终端执行 `xattr -cr /Applications/TrashCat.app`
+**安装后，首次启动前务必运行：**
+
+```bash
+xattr -cr /Applications/TrashCat.app
+```
+
+> ⚠️ 如果不运行此命令，macOS 会将 app 移到临时路径运行（App Translocation），
+> 导致即使你授予了"全磁盘访问"权限，授权弹窗也会一直弹出。
+> 这是因为 TrashCat 使用 ad-hoc 签名（开源免费），不是安全问题。
+
+如果跳过上面步骤直接打开，macOS 会提示"无法验证开发者"——右键点击 TrashCat →「打开」→「打开」即可。但**仍需运行上面的 `xattr -cr` 命令**才能正常授权。
 
 TrashCat 100% 本地运行，不联网，代码全公开可审计。
 
@@ -79,8 +87,8 @@ open TrashCat.xcodeproj
 ```bash
 git clone https://github.com/lunzi1992/TrashCat.git
 cd TrashCat
-./scripts/build-dmg.sh 0.3.0
-# 产出 TrashCat-0.3.0.dmg
+./scripts/build-dmg.sh 0.3.1
+# 产出 TrashCat-0.3.1.dmg
 ```
 
 **系统要求**：macOS 13 (Ventura) 以上。

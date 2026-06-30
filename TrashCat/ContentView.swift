@@ -3,6 +3,9 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var coordinator = ScanCoordinator()
     @State private var showPermissionGuide = false
+    /// 用户是否已在本次会话中主动关闭过权限引导。
+    /// 一旦为 true，`didBecomeActive` / `didChangeNotification` 不再重新弹窗。
+    @State private var userDismissedGuide = false
 
     var body: some View {
         Group {
@@ -32,10 +35,38 @@ struct ContentView: View {
                 coordinator.register(SpaceDiagnosticScanner())
                 coordinator.didRegister = true
             }
-            showPermissionGuide = !PermissionManager.shared.hasFullDiskAccess
+            // 首次启动：检测 FDA，未授权则弹出引导
+            let granted = PermissionManager.shared.hasFullDiskAccess
+            showPermissionGuide = !granted
+            userDismissedGuide = false
+        }
+        // 用户从「系统设置」返回 app 时重新检测。
+        // 关键：只自动关闭引导（FDA 已授权），不自动弹出（防止无限循环）。
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            handlePermissionChange()
+        }
+        // PermissionManager.recheck() 广播的变化通知。
+        .onReceive(NotificationCenter.default.publisher(for: PermissionManager.didChangeNotification)) { _ in
+            handlePermissionChange()
         }
         .sheet(isPresented: $showPermissionGuide) {
-            PermissionGuideView(isPresented: $showPermissionGuide)
+            PermissionGuideView(
+                isPresented: $showPermissionGuide,
+                onDefer: { userDismissedGuide = true }
+            )
+        }
+    }
+
+    /// FDA 状态变化处理：已授权 → 关闭引导；未授权 → 仅当用户未主动关闭过引导时才弹出。
+    private func handlePermissionChange() {
+        let granted = PermissionManager.shared.hasFullDiskAccess
+        if granted {
+            // 权限已获取，关闭引导并重置"已关闭"标记
+            showPermissionGuide = false
+            userDismissedGuide = false
+        } else if !userDismissedGuide {
+            // 仅在用户未曾主动关闭引导时才弹出——避免无限循环
+            showPermissionGuide = true
         }
     }
 
