@@ -262,6 +262,93 @@ enum RuleRegistry {
         ),
 
         CleanRule(
+            id: "brew-cache",
+            title: "Homebrew 缓存",
+            description: "Homebrew 下载的包缓存和已安装 formulae 的旧版本",
+            paths: ["~/Library/Caches/Homebrew"],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "下次 brew install 需重新下载包。可先用 brew cleanup 优雅清理"
+        ),
+
+        CleanRule(
+            id: "pip-cache",
+            title: "pip 缓存",
+            description: "Python pip 下载的 wheel 和源码包缓存",
+            paths: ["~/Library/Caches/pip"],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "下次 pip install 需重新下载包"
+        ),
+
+        CleanRule(
+            id: "yarn-cache",
+            title: "Yarn 缓存",
+            description: "Yarn 包管理器的离线缓存和全局模块缓存",
+            paths: [
+                "~/Library/Caches/Yarn",
+                "~/Library/Caches/node-gyp"
+            ],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "下次 yarn install 需重新下载所有依赖"
+        ),
+
+        CleanRule(
+            id: "npm-cache",
+            title: "npm 缓存",
+            description: "npm 下载的包缓存",
+            paths: ["~/.npm"],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "下次 npm install 需重新下载包。可先用 npm cache verify"
+        ),
+
+        CleanRule(
+            id: "maven-cache",
+            title: "Maven 缓存",
+            description: "Maven 本地仓库缓存，JVM 项目的依赖 jar 包",
+            paths: ["~/.m2/repository"],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "所有 Maven/Gradle 项目下次构建需重新下载全部依赖，可能耗时数十分钟"
+        ),
+
+        CleanRule(
+            id: "go-mod-cache",
+            title: "Go 模块缓存",
+            description: "Go modules 本地缓存，项目依赖的 Go 模块",
+            paths: ["~/go/pkg/mod", "~/Library/Caches/go-build"],
+            category: .cache,
+            riskLevel: .caution,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .trashItem,
+            impactSummary: "下次 go build 需重新下载所有依赖模块"
+        ),
+
+        CleanRule(
             id: "vscode-cache",
             title: "VS Code 缓存",
             description: "Visual Studio Code 缓存数据、扩展安装包和日志",

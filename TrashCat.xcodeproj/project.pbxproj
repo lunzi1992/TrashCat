@@ -30,6 +30,8 @@
 		A10025 /* ScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10003; };
 		A10026 /* RiskAssessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10019; };
 		A10027 /* ScanPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10021; };
+		A10030 /* ScanHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10027; };
+		A10031 /* L10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10028; };
 		A10028 /* RuleRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10022; };
 		A10029 /* FileCategorizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10018; };
 /* End PBXBuildFile section */
@@ -51,6 +53,8 @@
 		F10022 /* RuleRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleRegistry.swift; sourceTree = "<group>"; };
 		F10026 /* TrashCatTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrashCatTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F10023 /* RuleScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleScanner.swift; sourceTree = "<group>"; };
+		F10027 /* ScanHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanHistory.swift; sourceTree = "<group>"; };
+		F10028 /* L10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = L10n.swift; sourceTree = "<group>"; };
 		F10013 /* PermissionGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionGuideView.swift; sourceTree = "<group>"; };
 		F10014 /* ScanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanningView.swift; sourceTree = "<group>"; };
 		F10015 /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
@@ -139,6 +143,8 @@
 				F10018 /* FileCategorizer.swift */,
 				F10019 /* RiskAssessor.swift */,
 				F10021 /* ScanPolicy.swift */,
+				F10027 /* ScanHistory.swift */,
+				F10028 /* L10n.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -273,6 +279,8 @@
 				A10014 /* ScanningView.swift in Sources */,
 				A10015 /* ResultsView.swift in Sources */,
 				A10016 /* CleanReportView.swift in Sources */,
+				A10030 /* ScanHistory.swift in Sources */,
+				A10031 /* L10n.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

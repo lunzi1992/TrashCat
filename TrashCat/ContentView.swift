@@ -120,6 +120,22 @@ struct ContentView: View {
             )
             .keyboardShortcut(.return, modifiers: [])
 
+            // Scan history stats (only if we have a history)
+            let thisMonth = ScanHistory.thisMonth()
+            if thisMonth > 0 || ScanHistory.totalSessions() > 0 {
+                VStack(spacing: 2) {
+                    if thisMonth > 0 {
+                        Text("本月已释放 \(thisMonth.formattedSize)")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+                    Text("累计清理 \(ScanHistory.totalSessions()) 次")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 12)
+            }
+
             Spacer()
         }
         .padding(40)

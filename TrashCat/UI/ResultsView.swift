@@ -685,7 +685,13 @@ struct ResultsView: View {
         let cleanable = allItems.filter { selectedIDs.contains($0.id) && $0.isCleanable }
         Task {
             let result = await CleanManager().clean(items: cleanable)
-            await MainActor.run { isCleaning = false; cleanResult = result }
+            await MainActor.run {
+                isCleaning = false
+                cleanResult = result
+                if result.isSuccess {
+                    ScanHistory.record(freedSize: result.freedSize, fileCount: result.freedFileCount)
+                }
+            }
         }
     }
 }
