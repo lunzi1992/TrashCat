@@ -1,11 +1,18 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var coordinator = ScanCoordinator()
+    @StateObject private var coordinator: ScanCoordinator
     @State private var showPermissionGuide = false
-    /// 用户是否已在本次会话中主动关闭过权限引导。
-    /// 一旦为 true，`didBecomeActive` / `didChangeNotification` 不再重新弹窗。
     @State private var userDismissedGuide = false
+
+    init() {
+        // Share the AppDelegate's coordinator so menu bar can also scan
+        if let delegate = NSApp.delegate as? AppDelegate {
+            _coordinator = StateObject(wrappedValue: delegate.scanCoordinator)
+        } else {
+            _coordinator = StateObject(wrappedValue: ScanCoordinator())
+        }
+    }
 
     var body: some View {
         Group {
@@ -24,26 +31,10 @@ struct ContentView: View {
         }
         .frame(minWidth: 680, idealWidth: 720, minHeight: 500, idealHeight: 540)
         .onAppear {
-            // Guard: register scanners only once
-            if !coordinator.didRegister {
-                let ruleScanners: [Scannable] = RuleRegistry.all
-                    .filter { !$0.paths.isEmpty }
-                    .map { RuleScanner(rule: $0) }
-                coordinator.registerAll(ruleScanners)
-                coordinator.register(BrowserCacheScanner())
-                coordinator.register(OrphanScanner())
-                coordinator.register(SpaceDiagnosticScanner())
-                coordinator.didRegister = true
-            }
             // 首次启动：检测 FDA，未授权则弹出引导
             let granted = PermissionManager.shared.hasFullDiskAccess
             showPermissionGuide = !granted
             userDismissedGuide = false
-
-            // Wire menu bar to this window's scanner
-            if let delegate = NSApp.delegate as? AppDelegate {
-                delegate.wire(scanner: coordinator)
-            }
         }
         // 用户从「系统设置」返回 app 时重新检测。
         // 关键：只自动关闭引导（FDA 已授权），不自动弹出（防止无限循环）。
