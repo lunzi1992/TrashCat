@@ -1,13 +1,11 @@
 import AppKit
-import SwiftUI
 
-/// Menu bar integration for TrashCat.
-/// Shows a cat icon in the menu bar with quick actions.
+/// Menu bar integration — uses explicit button target/action + manual menu popup.
+/// This avoids the NSStatusItem.menu property which can be unreliable in SwiftUI lifecycle apps.
 @MainActor
 final class MenuBarController {
     private var statusItem: NSStatusItem?
 
-    // Direct callbacks, set in setup() before menu creation
     private var onScan: (() -> Void)?
     private var onOpen: (() -> Void)?
 
@@ -17,31 +15,24 @@ final class MenuBarController {
         self.onScan = onScan
         self.onOpen = onOpen
 
-        // Remove old one if any
         if let existing = statusItem {
             NSStatusBar.system.removeStatusItem(existing)
         }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-        if let button = statusItem?.button {
-            if let appIcon = NSApp.applicationIconImage {
-                let size = NSSize(width: 18, height: 18)
-                let resized = NSImage(size: size)
-                resized.lockFocus()
-                appIcon.draw(in: NSRect(origin: .zero, size: size),
-                             from: .zero, operation: .copy, fraction: 1.0)
-                resized.unlockFocus()
-                button.image = resized
-            } else {
-                button.image = NSImage(systemSymbolName: "trash.circle.fill",
-                                        accessibilityDescription: "TrashCat")
-            }
-            button.title = ""
+        guard let button = statusItem?.button else { return }
+
+        // Use a reliable SF Symbol that definitely exists
+        if let img = NSImage(systemSymbolName: "trash.circle", accessibilityDescription: "TrashCat") {
+            img.isTemplate = true  // adapts to system appearance
+            button.image = img
         }
 
-        let menu = buildMenu()
-        statusItem?.menu = menu
+        // Explicit target/action — click the button shows the menu
+        button.target = self
+        button.action = #selector(statusBarButtonClicked(_:))
+        button.sendAction(on: [.leftMouseDown, .rightMouseDown])
     }
 
     func teardown() {
@@ -51,9 +42,12 @@ final class MenuBarController {
         statusItem = nil
     }
 
-    func refreshStats() {
+    @objc private func statusBarButtonClicked(_ sender: NSStatusBarButton) {
         let menu = buildMenu()
-        statusItem?.menu = menu
+        // Manually pop up the menu at the status bar button
+        menu.popUp(positioning: nil,
+                   at: NSPoint(x: 0, y: sender.bounds.maxY),
+                   in: sender)
     }
 
     private func buildMenu() -> NSMenu {
@@ -62,57 +56,30 @@ final class MenuBarController {
 
         let thisMonth = ScanHistory.thisMonth()
         if thisMonth > 0 {
-            let statsItem = NSMenuItem(
-                title: "本月释放 \(thisMonth.formattedSize)",
-                action: nil, keyEquivalent: ""
-            )
-            statsItem.isEnabled = false
-            menu.addItem(statsItem)
+            let stats = NSMenuItem(title: "本月释放 \(thisMonth.formattedSize)", action: nil, keyEquivalent: "")
+            stats.isEnabled = false
+            menu.addItem(stats)
             menu.addItem(.separator())
         }
 
-        let scanItem = NSMenuItem(
-            title: "开始扫描",
-            action: #selector(triggerScan),
-            keyEquivalent: ""
-        )
-        scanItem.isEnabled = true
-        scanItem.target = self
+        let scanItem = NSMenuItem(title: "开始扫描", action: #selector(triggerScan), keyEquivalent: "")
+        scanItem.target = self; scanItem.isEnabled = true
         menu.addItem(scanItem)
 
-        let openItem = NSMenuItem(
-            title: "打开 TrashCat",
-            action: #selector(openMainWindow),
-            keyEquivalent: ""
-        )
-        openItem.isEnabled = true
-        openItem.target = self
+        let openItem = NSMenuItem(title: "打开 TrashCat", action: #selector(openMainWindow), keyEquivalent: "")
+        openItem.target = self; openItem.isEnabled = true
         menu.addItem(openItem)
 
         menu.addItem(.separator())
 
-        let quitItem = NSMenuItem(
-            title: "退出 TrashCat",
-            action: #selector(quitApp),
-            keyEquivalent: ""
-        )
-        quitItem.isEnabled = true
-        quitItem.target = self
+        let quitItem = NSMenuItem(title: "退出 TrashCat", action: #selector(quitApp), keyEquivalent: "")
+        quitItem.target = self; quitItem.isEnabled = true
         menu.addItem(quitItem)
 
         return menu
     }
 
-    @objc private func triggerScan() {
-        onScan?()
-    }
-
-    @objc private func openMainWindow() {
-        onOpen?()
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    @objc private func quitApp() {
-        NSApp.terminate(nil)
-    }
+    @objc private func triggerScan() { onScan?() }
+    @objc private func openMainWindow() { onOpen?(); NSApp.activate(ignoringOtherApps: true) }
+    @objc private func quitApp() { NSApp.terminate(nil) }
 }
