@@ -18,7 +18,7 @@ enum RuleRegistry {
             deletionUnit: .perFile,
             minAgeDays: nil,
             deleteStrategy: .trashItem,
-            impactSummary: "删除后应用下次启动可能略慢"
+            impactSummary: "删除后应用下次启动可能略慢，不影响数据和使用"
         ),
 
         CleanRule(
@@ -32,7 +32,7 @@ enum RuleRegistry {
             deletionUnit: .perFile,
             minAgeDays: nil,
             deleteStrategy: .trashItem,
-            impactSummary: "无影响"
+            impactSummary: "这些是运行日志，删除后不会影响任何应用正常运行"
         ),
 
         CleanRule(
@@ -46,7 +46,7 @@ enum RuleRegistry {
             deletionUnit: .perFile,
             minAgeDays: nil,
             deleteStrategy: .trashItem,
-            impactSummary: "无影响"
+            impactSummary: "这些是运行日志，删除后不会影响任何应用正常运行"
         ),
 
         CleanRule(
@@ -60,7 +60,7 @@ enum RuleRegistry {
             deletionUnit: .perFile,
             minAgeDays: nil,
             deleteStrategy: .trashItem,
-            impactSummary: "无影响"
+            impactSummary: "这些是运行日志，删除后不会影响任何应用正常运行"
         ),
 
         CleanRule(
@@ -74,7 +74,7 @@ enum RuleRegistry {
             deletionUnit: .perFile,
             minAgeDays: nil,
             deleteStrategy: .trashItem,
-            impactSummary: "无影响"
+            impactSummary: "这些是运行日志，删除后不会影响任何应用正常运行"
         ),
 
         CleanRule(
@@ -88,7 +88,7 @@ enum RuleRegistry {
             deletionUnit: .perFile,
             minAgeDays: 7,
             deleteStrategy: .trashItem,
-            impactSummary: "无影响"
+            impactSummary: "这些是运行日志，删除后不会影响任何应用正常运行"
         ),
 
         CleanRule(
@@ -423,7 +423,7 @@ enum RuleRegistry {
             deletionUnit: .perFile,
             minAgeDays: nil,
             deleteStrategy: .trashItem,
-            impactSummary: "如果属于仍在使用但未通过 bundle ID 匹配的应用，删除后可能导致配置丢失"
+            impactSummary: "注意：这些文件可能属于已卸载的应用，但也可能属于当前仍在使用但未通过名称匹配的应用。建议逐项确认后再删除，误删可能导致部分应用配置丢失"
         ),
 
         // ── Space Diagnosis Tier ──

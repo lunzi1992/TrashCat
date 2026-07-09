@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		A10001 /* TrashCatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001; };
+		A10032 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10029; };
+		A10033 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10030; };
 		A10002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10002; };
 		A10003 /* ScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10003; };
 		A10004 /* ScannableProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10004; };
@@ -39,6 +41,7 @@
 /* Begin PBXFileReference section */
 		F10000 /* TrashCat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TrashCat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F10001 /* TrashCatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashCatApp.swift; sourceTree = "<group>"; };
+		F10029 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		F10002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		F10003 /* ScanModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanModels.swift; sourceTree = "<group>"; };
 		F10004 /* ScannableProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannableProtocol.swift; sourceTree = "<group>"; };
@@ -55,6 +58,7 @@
 		F10023 /* RuleScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleScanner.swift; sourceTree = "<group>"; };
 		F10027 /* ScanHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanHistory.swift; sourceTree = "<group>"; };
 		F10028 /* L10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = L10n.swift; sourceTree = "<group>"; };
+		F10030 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		F10013 /* PermissionGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionGuideView.swift; sourceTree = "<group>"; };
 		F10014 /* ScanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanningView.swift; sourceTree = "<group>"; };
 		F10015 /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
@@ -78,6 +82,7 @@
 			isa = PBXGroup;
 			children = (
 				F10001 /* TrashCatApp.swift */,
+				F10029 /* AppDelegate.swift */,
 				F10002 /* ContentView.swift */,
 				F10020 /* Info.plist */,
 				F10010 /* Assets.xcassets */,
@@ -145,6 +150,7 @@
 				F10021 /* ScanPolicy.swift */,
 				F10027 /* ScanHistory.swift */,
 				F10028 /* L10n.swift */,
+				F10030 /* MenuBarController.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -263,6 +269,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10001 /* TrashCatApp.swift in Sources */,
+				A10032 /* AppDelegate.swift in Sources */,
 				A10002 /* ContentView.swift in Sources */,
 				A10003 /* ScanModels.swift in Sources */,
 				A10004 /* ScannableProtocol.swift in Sources */,
@@ -281,6 +288,7 @@
 				A10016 /* CleanReportView.swift in Sources */,
 				A10030 /* ScanHistory.swift in Sources */,
 				A10031 /* L10n.swift in Sources */,
+				A10033 /* MenuBarController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

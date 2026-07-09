@@ -39,6 +39,11 @@ struct ContentView: View {
             let granted = PermissionManager.shared.hasFullDiskAccess
             showPermissionGuide = !granted
             userDismissedGuide = false
+
+            // Wire menu bar to this window's scanner
+            if let delegate = NSApp.delegate as? AppDelegate {
+                delegate.wire(scanner: coordinator)
+            }
         }
         // 用户从「系统设置」返回 app 时重新检测。
         // 关键：只自动关闭引导（FDA 已授权），不自动弹出（防止无限循环）。

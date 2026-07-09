@@ -85,6 +85,43 @@ TrashCat/
 
 ---
 
+## [0.4.0] — 2026-07-09 — P1/P2 冲刺：包管理器规则 + i18n + 历史 + 菜单栏
+
+### 🧹 包管理器缓存规则（6 条新增）
+
+- Homebrew 缓存 (`brew-cache`)
+- pip 缓存 (`pip-cache`)
+- Yarn / npm 缓存 (`yarn-cache`, `npm-cache`)
+- Maven 本地仓库 (`maven-cache`)
+- Go 模块缓存 (`go-mod-cache`)
+
+规则总数：31 → 37
+
+### 🌐 i18n 国际化框架
+
+- `L10n.swift` 统一字符串入口，50+ 个 key
+- NSLocalizedString 驱动，预留中英双语
+- 数据模型层（RuleRegistry 标题/描述）保持原有 displayName
+
+### 📊 扫描历史记录
+
+- `ScanHistory` 基于 UserDefaults 的持久化存储
+- 首页显示"本月已释放 XX GB"统计
+- 支持 thisMonth/thisWeek/allTime 聚合查询
+
+### 🔔 菜单栏快捷入口
+
+- `AppDelegate` + `MenuBarController` 实现 NSStatusItem
+- 菜单栏图标一键扫描 / 打开主窗口 / 退出
+- 菜单内显示本月清理统计
+
+### 🎨 UI 优化
+
+- 权限引导文案重写：增加"不会做"的 3 条绿色承诺
+- 影响说明口语化：去掉"无影响"，改为具体描述
+
+---
+
 ## [0.3.0] — 2026-06-25 — P0 冲刺：DMG 分发 + 进度反馈 + 测试 + 报告升级
 
 ### 📦 DMG 分发

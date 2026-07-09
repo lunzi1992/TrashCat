@@ -17,16 +17,30 @@ struct PermissionGuideView: View {
                 .font(.title2)
                 .fontWeight(.bold)
 
-            Text("""
-                为了让 TrashCat 能扫描系统缓存、日志和应用残留，\
-                需要你授予「全磁盘访问」权限。
+            VStack(spacing: 12) {
+                Text("TrashCat 需要扫描系统缓存、日志和应用残留，macOS 要求此类操作必须获得你的明确授权。")
+                    .font(.body)
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
 
-                我们不会上传任何数据，一切都在本地完成。
-                """)
-                .font(.body)
+                VStack(spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill").foregroundColor(.green).font(.caption)
+                        Text("不会上传任何数据——TrashCat 不出门，断网照常工作")
+                    }
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill").foregroundColor(.green).font(.caption)
+                        Text("不会删除你的照片、文档、聊天记录或工作文件")
+                    }
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill").foregroundColor(.green).font(.caption)
+                        Text("代码全部开源，随时可以审计每一行逻辑")
+                    }
+                }
+                .font(.callout)
                 .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 380)
+            }
+            .frame(maxWidth: 400)
 
             // App Translocation 警告
             if PermissionManager.shared.isTranslocated {
