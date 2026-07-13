@@ -11,6 +11,15 @@ private enum SelectionVisualState: Equatable {
     case full
 }
 
+private struct DecisionBucket {
+    let title: String
+    let subtitle: String
+    let size: Int64
+    let count: Int
+    let icon: String
+    let tint: Color
+}
+
 @MainActor
 private final class SelectionStore: ObservableObject {
     private let sizeOf: [UUID: Int64]
@@ -82,6 +91,7 @@ private final class SelectionStore: ObservableObject {
 
         let defaultIDs = items.compactMap { item -> UUID? in
             guard cleanable.contains(item.id),
+                  item.category != .trash,
                   risks[item.id]?.defaultSelected == true else { return nil }
             return item.id
         }
@@ -96,6 +106,10 @@ private final class SelectionStore: ObservableObject {
     var hasUnsafeSelection: Bool { unsafeCount > 0 }
     var hasRecommendedSelection: Bool { !recommendedIDs.isEmpty }
     var isRecommendedSelection: Bool { selectedIDs == recommendedIDs }
+    var recommendedSize: Int64 {
+        recommendedIDs.reduce(0) { $0 + (sizeOf[$1] ?? 0) }
+    }
+    var recommendedCount: Int { recommendedIDs.count }
 
     var selectedByRisk: [(RiskLevel, Int)] {
         [RiskLevel.safe, .caution, .danger].compactMap { level in
@@ -305,6 +319,7 @@ private struct TierCard: View {
         self.selection = selection
         self.epoch = epoch
         self.groupKey = SelectionStore.tierKey(tier.id)
+        self._isExpanded = State(initialValue: tier.id == RiskLevel.safe.rawValue)
 
         switch tier.id {
         case "diagnostic":
@@ -510,6 +525,128 @@ private struct FileRow: View {
     }
 }
 
+private struct DecisionSummaryCard: View {
+    let bucket: DecisionBucket
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: bucket.icon)
+                .font(.system(size: 18))
+                .foregroundColor(bucket.tint)
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(bucket.title)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                    Text("\(bucket.count) 项")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                Text(bucket.size.formattedSize)
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(bucket.tint)
+                Text(bucket.subtitle)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(bucket.tint.opacity(0.07))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(bucket.tint.opacity(0.18), lineWidth: 1)
+        )
+    }
+}
+
+private struct SafetyRow: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundColor(.green)
+                .frame(width: 16)
+            Text(text)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct CleaningOverlay: View {
+    let selectedCount: Int
+    let selectedSize: Int64
+    let includesTrashItems: Bool
+
+    @State private var pulse = false
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(Color.green.opacity(0.12))
+                        .frame(width: 82, height: 82)
+                        .scaleEffect(pulse ? 1.08 : 0.92)
+                        .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
+
+                    ProgressView()
+                        .controlSize(.large)
+                }
+
+                VStack(spacing: 6) {
+                    Text("正在清理...")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                    Text(includesTrashItems ? "正在处理 \(selectedCount) 个文件，废纸篓项目会被清空" : "正在把 \(selectedCount) 个文件移入废纸篓")
+                        .font(.body)
+                    Text("选中大小 \(selectedSize.formattedSize)，完成后会显示本次清理结果")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .multilineTextAlignment(.center)
+
+                HStack(spacing: 6) {
+                    Image(systemName: "trash")
+                    Text(includesTrashItems ? "新移入废纸篓的文件仍可恢复，已在废纸篓中的项目会释放空间" : "文件会先进入废纸篓，清空废纸篓后才会真正释放空间")
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
+            .padding(28)
+            .frame(width: 360)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(nsColor: .windowBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+            .shadow(radius: 18, y: 8)
+        }
+        .onAppear { pulse = true }
+    }
+}
+
 // MARK: - ResultsView
 
 struct ResultsView: View {
@@ -520,10 +657,16 @@ struct ResultsView: View {
     @State private var showConfirmClean = false
     @State private var cleanResult: CleanResult?
     @State private var isCleaning = false
+    @State private var cleaningCount = 0
+    @State private var cleaningSize: Int64 = 0
+    @State private var cleaningIncludesTrashItems = false
 
     private let allItems: [CleanItem]
     private let tierGroups: [TierGroup]
     private let nonCleanableIDs: Set<UUID>
+    private let recommendationBucket: DecisionBucket
+    private let reviewBucket: DecisionBucket
+    private let diagnosticBucket: DecisionBucket
 
     init(summary: ScanSummary, coordinator: ScanCoordinator) {
         self.summary = summary
@@ -532,10 +675,37 @@ struct ResultsView: View {
         let items = summary.results.flatMap { $0.items }
         let groups = summary.buildTierGroups()
         let nonCleanable = Set(items.filter { !$0.isCleanable }.map { $0.id })
+        let recommendedItems = items.filter { $0.isCleanable && $0.riskLevel == .safe && $0.category != .trash }
+        let reviewItems = items.filter { $0.isCleanable && $0.riskLevel != .safe }
+        let diagnosticItems = items.filter { !$0.isCleanable }
 
         self.allItems = items
         self.tierGroups = groups
         self.nonCleanableIDs = nonCleanable
+        self.recommendationBucket = DecisionBucket(
+            title: "推荐清理",
+            subtitle: "默认选择，先移入废纸篓",
+            size: recommendedItems.reduce(0) { $0 + $1.size },
+            count: recommendedItems.count,
+            icon: "checkmark.shield.fill",
+            tint: .green
+        )
+        self.reviewBucket = DecisionBucket(
+            title: "需要确认",
+            subtitle: "不会默认选择，展开后再决定",
+            size: reviewItems.reduce(0) { $0 + $1.size },
+            count: reviewItems.count,
+            icon: "exclamationmark.shield.fill",
+            tint: .orange
+        )
+        self.diagnosticBucket = DecisionBucket(
+            title: "仅诊断",
+            subtitle: "只告诉你空间在哪，不自动处理",
+            size: diagnosticItems.reduce(0) { $0 + $1.size },
+            count: diagnosticItems.count,
+            icon: "magnifyingglass.circle.fill",
+            tint: .blue
+        )
         self._selection = StateObject(
             wrappedValue: SelectionStore(
                 items: items,
@@ -554,28 +724,42 @@ struct ResultsView: View {
     }
 
     private var mainView: some View {
-        VStack(spacing: 0) {
-            headerView
-            Divider()
-            ScrollView {
-                if tierGroups.isEmpty {
-                    emptyStateView.padding(40)
-                } else {
-                    LazyVStack(spacing: 12) {
-                        ForEach(tierGroups) { tier in
-                            TierCard(tier: tier, selection: selection, epoch: selection.epoch)
-                        }
-                    }.padding(12)
+        ZStack {
+            VStack(spacing: 0) {
+                headerView
+                Divider()
+                ScrollView {
+                    if tierGroups.isEmpty {
+                        emptyStateView.padding(40)
+                    } else {
+                        LazyVStack(spacing: 12) {
+                            ForEach(tierGroups) { tier in
+                                TierCard(tier: tier, selection: selection, epoch: selection.epoch)
+                            }
+                        }.padding(12)
+                    }
                 }
+                footerView
             }
-            footerView
+            .blur(radius: isCleaning ? 1.5 : 0)
+            .allowsHitTesting(!isCleaning)
+
+            if isCleaning {
+                CleaningOverlay(
+                    selectedCount: cleaningCount,
+                    selectedSize: cleaningSize,
+                    includesTrashItems: cleaningIncludesTrashItems
+                )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
         }
         .frame(minHeight: 500)
         .sheet(isPresented: $showConfirmClean) { confirmSheet }
+        .animation(.easeInOut(duration: 0.18), value: isCleaning)
     }
 
     private var headerView: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("扫描完成").font(.title3).fontWeight(.bold)
@@ -586,16 +770,35 @@ struct ResultsView: View {
                 Button("重新扫描") { coordinator.startScan() }.font(.caption)
             }
             if !summary.isEmpty {
-                HStack(spacing: 24) {
-                    VStack {
-                        Text(selection.selectedSize.formattedSize)
-                            .font(.title).fontWeight(.bold).foregroundColor(.orange)
-                        Text("已选 \(selection.selectedCount)/\(summary.totalFileCount) 项")
-                            .font(.caption).foregroundColor(.secondary)
-                    }
-                }.padding(.vertical, 2)
+                HStack(spacing: 10) {
+                    DecisionSummaryCard(bucket: recommendationBucket)
+                    DecisionSummaryCard(bucket: reviewBucket)
+                    DecisionSummaryCard(bucket: diagnosticBucket)
+                }
+
+                HStack(spacing: 8) {
+                    Image(systemName: selection.hasUnsafeSelection ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .foregroundColor(selection.hasUnsafeSelection ? .orange : .green)
+                    Text(selectionSummaryText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
             }
         }.padding(.horizontal, 20).padding(.vertical, 14)
+    }
+
+    private var selectionSummaryText: String {
+        if selection.hasUnsafeSelection {
+            return "已选 \(selection.selectedCount) 项，共 \(selection.selectedSize.formattedSize)。包含需要确认的项目，清理前会再次确认。"
+        }
+        if selection.hasSelection {
+            if selectedCleanableItems.contains(where: { $0.category == .trash }) {
+                return "已选 \(selection.selectedCount) 项，共 \(selection.selectedSize.formattedSize)。其中废纸篓项目会被清空，其余项目会移入废纸篓。"
+            }
+            return "已选推荐清理项 \(selection.selectedCount) 项，共 \(selection.selectedSize.formattedSize)。不会处理仅诊断项目。"
+        }
+        return "还没有选择要清理的项目。推荐清理项可一键恢复选择。"
     }
 
     private var emptyStateView: some View {
@@ -610,20 +813,19 @@ struct ResultsView: View {
         VStack(spacing: 0) {
             Divider()
             HStack {
-                if selection.hasRecommendedSelection && !selection.isRecommendedSelection {
-                    Button("选择推荐项") { selection.selectRecommended() }
-                        .font(.caption).padding(.leading, 16)
-                } else if selection.hasSelection {
-                    Button("取消全选") { selection.clear() }
-                        .font(.caption).padding(.leading, 16)
-                } else {
-                    EmptyView()
-                }
+                Button("选择推荐清理项") { selection.selectRecommended() }
+                    .font(.caption)
+                    .disabled(!selection.hasRecommendedSelection || selection.isRecommendedSelection)
+                    .padding(.leading, 16)
+
+                Button("清空选择") { selection.clear() }
+                    .font(.caption)
+                    .disabled(!selection.hasSelection)
                 Spacer()
                 Button(action: { showConfirmClean = true }) {
                     HStack(spacing: 6) {
                         Image(systemName: "trash")
-                        Text("\(cleanupLabel) (\(selection.selectedSize.formattedSize))")
+                        Text("\(cleanupLabel) \(selection.selectedSize.formattedSize)")
                     }.frame(minWidth: 200)
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
@@ -636,19 +838,29 @@ struct ResultsView: View {
     }
 
     private var cleanupLabel: String {
-        selection.hasUnsafeSelection ? "确认后清理" : "安全清理"
+        if selectedCleanableItems.contains(where: { $0.category == .trash }) {
+            return selection.hasUnsafeSelection ? "确认后清理" : "清空并清理"
+        }
+        return selection.hasUnsafeSelection ? "确认后清理" : "安全清理"
     }
 
     private var confirmSheet: some View {
         let byRisk = selection.selectedByRisk
+        let selectedItems = selectedCleanableItems
+        let hasTrashItems = selectedItems.contains { $0.category == .trash }
 
-        return VStack(spacing: 16) {
-            Image(systemName: "trash.fill").font(.system(size: 40)).foregroundColor(.orange)
-            Text("确认清理？").font(.title2).fontWeight(.bold)
+        return VStack(spacing: 18) {
+            Image(systemName: selection.hasUnsafeSelection ? "exclamationmark.triangle.fill" : "trash.fill")
+                .font(.system(size: 40))
+                .foregroundColor(selection.hasUnsafeSelection ? .orange : .green)
+            Text(selection.hasUnsafeSelection ? "确认后再清理" : "安全清理推荐项")
+                .font(.title2)
+                .fontWeight(.bold)
             VStack(spacing: 2) {
-                Text("将移动 \(selection.selectedCount) 个文件到废纸篓")
-                Text("共释放 \(selection.selectedSize.formattedSize) 空间")
-                    .foregroundColor(.orange).fontWeight(.medium)
+                Text(hasTrashItems ? "将处理 \(selection.selectedCount) 个文件，其中废纸篓项目会被清空" : "将移动 \(selection.selectedCount) 个文件到废纸篓")
+                Text(hasTrashItems ? "选中总大小 \(selection.selectedSize.formattedSize)" : "清空废纸篓后可释放 \(selection.selectedSize.formattedSize)")
+                    .foregroundColor(selection.hasUnsafeSelection ? .orange : .green)
+                    .fontWeight(.medium)
             }.font(.body).multilineTextAlignment(.center)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -664,25 +876,37 @@ struct ResultsView: View {
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
 
             if byRisk.contains(where: { $0.0 == .danger }) {
-                Text("⚠️ 选中的文件包含谨慎处理项，请确认后继续。")
+                Text("选中的文件包含谨慎处理项，请确认来源和影响后继续。")
                     .font(.caption).foregroundColor(.red)
             }
-            Text("仅会处理 TrashCat 支持安全清理的项目；空间诊断项不会被清理。")
-                .font(.caption).foregroundColor(.secondary)
-            Text("文件会先移入废纸篓，后悔了还能恢复。").font(.caption).foregroundColor(.secondary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                SafetyRow(icon: "trash", text: hasTrashItems ? "已在废纸篓中的选中项目会被永久清空" : "文件只会移入废纸篓，不会永久删除")
+                SafetyRow(icon: "eye", text: "空间诊断项不会被清理，只用于定位占用")
+                SafetyRow(icon: "checkmark.square", text: "未选中的项目不会被处理")
+                SafetyRow(icon: "arrow.uturn.backward", text: hasTrashItems ? "新移入废纸篓的文件仍可恢复" : "后悔了可以从废纸篓恢复")
+            }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.green.opacity(0.06)))
 
             HStack(spacing: 16) {
                 Button("再想想") { showConfirmClean = false }
-                Button("清理！") { showConfirmClean = false; performClean() }
+                Button(selection.hasUnsafeSelection ? "确认清理" : "安全清理") {
+                    showConfirmClean = false
+                    performClean()
+                }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.return, modifiers: [])
             }.padding(.top, 4)
-        }.padding(32).frame(width: 400)
+        }.padding(32).frame(width: 420)
     }
 
     private func performClean() {
+        let cleanable = selectedCleanableItems
+        cleaningCount = cleanable.count
+        cleaningSize = cleanable.reduce(0) { $0 + $1.size }
+        cleaningIncludesTrashItems = cleanable.contains { $0.category == .trash }
         isCleaning = true
-        let selectedIDs = selection.selectedIDs
-        let cleanable = allItems.filter { selectedIDs.contains($0.id) && $0.isCleanable }
+
         Task {
             let result = await CleanManager().clean(items: cleanable)
             await MainActor.run {
@@ -693,6 +917,11 @@ struct ResultsView: View {
                 }
             }
         }
+    }
+
+    private var selectedCleanableItems: [CleanItem] {
+        let selectedIDs = selection.selectedIDs
+        return allItems.filter { selectedIDs.contains($0.id) && $0.isCleanable }
     }
 }
 

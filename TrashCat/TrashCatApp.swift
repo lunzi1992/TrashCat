@@ -6,7 +6,7 @@ struct TrashCatApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(coordinator: appDelegate.scanCoordinator)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 720, height: 540)

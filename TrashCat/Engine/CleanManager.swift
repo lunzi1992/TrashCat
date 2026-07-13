@@ -9,6 +9,8 @@ final class CleanManager {
         let startTime = Date()
         var freedSize: Int64 = 0
         var freedCount = 0
+        var movedToTrashSize: Int64 = 0
+        var movedToTrashCount = 0
         var errors: [String] = []
         var catSizes: [CleanCategory: Int64] = [:]
         var catCounts: [CleanCategory: Int] = [:]
@@ -19,9 +21,15 @@ final class CleanManager {
                 continue
             }
             do {
-                try await moveToTrash(path: item.path)
-                freedSize += item.size
-                freedCount += 1
+                if item.category == .trash {
+                    try deleteTrashItem(path: item.path)
+                    freedSize += item.size
+                    freedCount += 1
+                } else {
+                    try await moveToTrash(path: item.path)
+                    movedToTrashSize += item.size
+                    movedToTrashCount += 1
+                }
                 catSizes[item.category, default: 0] += item.size
                 catCounts[item.category, default: 0] += 1
             } catch {
@@ -37,6 +45,8 @@ final class CleanManager {
         return CleanResult(
             freedSize: freedSize,
             freedFileCount: freedCount,
+            movedToTrashSize: movedToTrashSize,
+            movedToTrashFileCount: movedToTrashCount,
             duration: duration,
             errors: errors,
             categoryBreakdown: breakdown
@@ -49,6 +59,19 @@ final class CleanManager {
         var resultingURL: NSURL?
 
         try fileManager.trashItem(at: url, resultingItemURL: &resultingURL)
+    }
+
+    /// Permanently remove an item that is already inside the user's Trash.
+    private func deleteTrashItem(path: String) throws {
+        let homeTrash = "\(fileManager.homeDirectoryForCurrentUser.path)/.Trash"
+        guard path == homeTrash || path.hasPrefix(homeTrash + "/") else {
+            throw NSError(
+                domain: "TrashCat.CleanManager",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "只允许清空废纸篓中的项目"]
+            )
+        }
+        try fileManager.removeItem(atPath: path)
     }
 
     /// Permanently delete (use with caution — not used in MVP default path)

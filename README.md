@@ -91,7 +91,7 @@ cd TrashCat
 # 产出 TrashCat-0.3.1.dmg
 ```
 
-**系统要求**：macOS 13 (Ventura) 以上。
+**系统要求**：macOS 13 (Ventura) 以上，Universal 构建，支持 Apple Silicon 与 Intel Mac。
 
 ## 🛠 这只猫什么构造
 
@@ -100,7 +100,7 @@ cd TrashCat
 | 骨架 | Swift 5.9+ |
 | 皮毛 | SwiftUI |
 | 神经 | MVVM |
-| 地盘 | macOS 13 Ventura+ |
+| 地盘 | macOS 13 Ventura+，Apple Silicon / Intel Mac |
 | 外包装 | DMG（ad-hoc 签名） |
 | 血缘 | 纯 Apple 框架，零外部依赖 |
 

@@ -17,25 +17,29 @@ protocol Scannable: AnyObject {
 
 enum ScanState: Equatable {
     case idle
-    case scanning(currentCategory: String, progress: Double, filesScanned: Int, filesFound: Int)
+    case scanning(currentCategory: String, progress: Double, filesScanned: Int, totalScanUnits: Int, filesFound: Int)
     case completed(ScanSummary)
     case error(String)
 
     // Backward-compatible accessors
     var categoryText: String {
-        if case .scanning(let cat, _, _, _) = self { return cat }
+        if case .scanning(let cat, _, _, _, _) = self { return cat }
         return ""
     }
     var progressValue: Double {
-        if case .scanning(_, let p, _, _) = self { return p }
+        if case .scanning(_, let p, _, _, _) = self { return p }
         return 0
     }
     var filesScanned: Int {
-        if case .scanning(_, _, let s, _) = self { return s }
+        if case .scanning(_, _, let s, _, _) = self { return s }
+        return 0
+    }
+    var totalScanUnits: Int {
+        if case .scanning(_, _, _, let total, _) = self { return total }
         return 0
     }
     var filesFound: Int {
-        if case .scanning(_, _, _, let f) = self { return f }
+        if case .scanning(_, _, _, _, let f) = self { return f }
         return 0
     }
 }
@@ -48,6 +52,7 @@ final class ScanCoordinator: ObservableObject {
 
     private var scanners: [Scannable] = []
     private var scanTask: Task<Void, Never>?
+    private var scanGeneration = 0
     var didRegister = false
 
     var isScanning: Bool {
@@ -64,12 +69,18 @@ final class ScanCoordinator: ObservableObject {
     }
 
     func startScan() {
-        scanTask?.cancel()
+        guard !isScanning else { return }
 
-        state = .scanning(currentCategory: "准备扫描...", progress: 0, filesScanned: 0, filesFound: 0)
+        scanTask?.cancel()
+        scanGeneration += 1
+        let generation = scanGeneration
+
+        let scannerCount = scanners.count
+        state = .scanning(currentCategory: "准备扫描...", progress: 0, filesScanned: 0, totalScanUnits: scannerCount, filesFound: 0)
 
         scanTask = Task { [scanners] in
-            let total = Double(scanners.count)
+            let totalScanUnits = scanners.count
+            let total = Double(max(totalScanUnits, 1))
             let startTime = Date()
 
             // Update progress as each scanner completes
@@ -108,10 +119,12 @@ final class ScanCoordinator: ObservableObject {
                         ? scanners[min(completedCount, scanners.count - 1)].progressLabel
                         : "收尾中..."
                     await MainActor.run {
+                        guard self.scanGeneration == generation else { return }
                         self.state = .scanning(
                             currentCategory: label,
                             progress: prog,
                             filesScanned: completedCount,
+                            totalScanUnits: totalScanUnits,
                             filesFound: totalFilesFound
                         )
                     }
@@ -124,18 +137,26 @@ final class ScanCoordinator: ObservableObject {
             }
 
             guard !Task.isCancelled else {
-                await MainActor.run { self.state = .idle }
+                await MainActor.run {
+                    guard self.scanGeneration == generation else { return }
+                    self.state = .idle
+                }
                 return
             }
 
             let duration = Date().timeIntervalSince(startTime)
             let summary = ScanSummary(results: results, scanDuration: duration)
-            await MainActor.run { self.state = .completed(summary) }
+            await MainActor.run {
+                guard self.scanGeneration == generation else { return }
+                self.state = .completed(summary)
+            }
         }
     }
 
     func cancelScan() {
+        scanGeneration += 1
         scanTask?.cancel()
+        scanTask = nil
         state = .idle
     }
 }

@@ -19,13 +19,28 @@ struct CleanReportView: View {
 
             // ── Summary numbers ──
             VStack(spacing: 4) {
-                HStack(spacing: 4) {
-                    Text("释放了")
-                    Text(result.freedSize.formattedSize)
-                        .fontWeight(.bold).foregroundColor(.green)
-                    Text("空间")
+                if result.movedToTrashFileCount > 0 {
+                    HStack(spacing: 4) {
+                        Text("已移入废纸篓")
+                        Text(result.movedToTrashSize.formattedSize)
+                            .fontWeight(.bold).foregroundColor(.green)
+                    }
+                    Text("清空废纸篓后才会真正释放这部分空间")
+                        .font(.caption).foregroundColor(.secondary)
                 }
-                Text("共 \(result.freedFileCount) 个文件被移入废纸篓")
+                if result.freedFileCount > 0 {
+                    HStack(spacing: 4) {
+                        Text("已释放")
+                        Text(result.freedSize.formattedSize)
+                            .fontWeight(.bold).foregroundColor(.green)
+                        Text("空间")
+                    }
+                }
+                if result.movedToTrashFileCount == 0 && result.freedFileCount == 0 {
+                    Text("没有成功清理任何文件")
+                        .foregroundColor(.secondary)
+                }
+                Text(summaryCountText)
                     .font(.caption).foregroundColor(.secondary)
                 Text("用时 \(String(format: "%.1f", result.duration)) 秒")
                     .font(.caption2).foregroundColor(.secondary)
@@ -83,22 +98,26 @@ struct CleanReportView: View {
             }
 
             // ── Recovery hint ──
-            HStack(spacing: 6) {
-                Image(systemName: "trash")
-                    .font(.caption)
-                Text("文件在废纸篓里，随时可以恢复")
-                    .font(.caption)
+            if result.movedToTrashFileCount > 0 {
+                HStack(spacing: 6) {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                    Text("新清理的文件在废纸篓里，随时可以恢复")
+                        .font(.caption)
+                }
+                .foregroundColor(.secondary)
             }
-            .foregroundColor(.secondary)
 
             // ── Actions ──
             HStack(spacing: 12) {
-                Button("打开废纸篓") {
-                    NSWorkspace.shared.activateFileViewerSelecting(
-                        [URL(fileURLWithPath: NSHomeDirectory() + "/.Trash")]
-                    )
+                if result.movedToTrashFileCount > 0 {
+                    Button("打开废纸篓") {
+                        NSWorkspace.shared.activateFileViewerSelecting(
+                            [URL(fileURLWithPath: NSHomeDirectory() + "/.Trash")]
+                        )
+                    }
+                    .font(.caption)
                 }
-                .font(.caption)
 
                 Button("好的") { onDone() }
                     .buttonStyle(.borderedProminent)
@@ -109,5 +128,16 @@ struct CleanReportView: View {
             Spacer()
         }
         .padding(40)
+    }
+
+    private var summaryCountText: String {
+        var parts: [String] = []
+        if result.movedToTrashFileCount > 0 {
+            parts.append("\(result.movedToTrashFileCount) 个文件已移入废纸篓")
+        }
+        if result.freedFileCount > 0 {
+            parts.append("\(result.freedFileCount) 个废纸篓项目已清空")
+        }
+        return parts.isEmpty ? "请查看下方错误信息" : parts.joined(separator: "，")
     }
 }

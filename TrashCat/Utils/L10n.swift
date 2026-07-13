@@ -19,7 +19,7 @@ enum L10n {
     static let scanningSniffing = NSLocalizedString("scan.sniffing", value: "正在嗅探...", comment: "")
     static let scanningCaught = NSLocalizedString("scan.caught", value: "已捕获 %d 只老鼠", comment: "")
     static let scanningFound = NSLocalizedString("scan.found", value: "已发现 %d 个文件", comment: "")
-    static let scanningDirs = NSLocalizedString("scan.dirs", value: "%d / ? 个目录已扫描", comment: "")
+    static let scanningDirs = NSLocalizedString("scan.dirs", value: "%d / %d 个扫描项已完成", comment: "")
     static let scanCancel = NSLocalizedString("scan.cancel", value: "取消扫描", comment: "")
     static let scanFooter = NSLocalizedString("scan.footer", value: "TrashCat 正在翻你 Mac 的角落...", comment: "")
 
@@ -53,7 +53,7 @@ enum L10n {
     // MARK: - Clean Report
     static let reportDone = NSLocalizedString("report.done", value: "清理完成！", comment: "")
     static let reportPartial = NSLocalizedString("report.partial", value: "部分完成", comment: "")
-    static let reportFreed = NSLocalizedString("report.freed", value: "释放了", comment: "")
+    static let reportFreed = NSLocalizedString("report.freed", value: "已释放", comment: "")
     static let reportSpace = NSLocalizedString("report.space", value: "空间", comment: "")
     static let reportFilesMoved = NSLocalizedString("report.filesMoved", value: "共 %d 个文件被移入废纸篓", comment: "")
     static let reportDuration = NSLocalizedString("report.duration", value: "用时 %.1f 秒", comment: "")
@@ -66,7 +66,7 @@ enum L10n {
     // MARK: - Confirm Dialog
     static let confirmTitle = NSLocalizedString("confirm.title", value: "确认清理？", comment: "")
     static let confirmFilesCount = NSLocalizedString("confirm.filesCount", value: "将移动 %d 个文件到废纸篓", comment: "")
-    static let confirmSizeFreed = NSLocalizedString("confirm.sizeFreed", value: "共释放 %@ 空间", comment: "")
+    static let confirmSizeFreed = NSLocalizedString("confirm.sizeFreed", value: "清空废纸篓后可释放 %@", comment: "")
     static let confirmDangerWarning = NSLocalizedString("confirm.dangerWarning", value: "⚠️ 选中的文件包含谨慎处理项，请确认后继续。", comment: "")
     static let confirmSafeHint = NSLocalizedString("confirm.safeHint", value: "文件会先移入废纸篓，后悔了还能恢复。", comment: "")
     static let confirmThinkAgain = NSLocalizedString("confirm.thinkAgain", value: "再想想", comment: "")

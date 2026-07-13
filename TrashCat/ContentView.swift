@@ -5,13 +5,8 @@ struct ContentView: View {
     @State private var showPermissionGuide = false
     @State private var userDismissedGuide = false
 
-    init() {
-        // Share the AppDelegate's coordinator so menu bar can also scan
-        if let delegate = NSApp.delegate as? AppDelegate {
-            _coordinator = StateObject(wrappedValue: delegate.scanCoordinator)
-        } else {
-            _coordinator = StateObject(wrappedValue: ScanCoordinator())
-        }
+    init(coordinator: ScanCoordinator) {
+        _coordinator = StateObject(wrappedValue: coordinator)
     }
 
     var body: some View {
@@ -19,9 +14,9 @@ struct ContentView: View {
             switch coordinator.state {
             case .idle:
                 idleView
-            case .scanning(let category, let progress, let filesScanned, let filesFound):
+            case .scanning(let category, let progress, let filesScanned, let totalScanUnits, let filesFound):
                 ScanningView(category: category, progress: progress,
-                             filesScanned: filesScanned, filesFound: filesFound,
+                             filesScanned: filesScanned, totalScanUnits: totalScanUnits, filesFound: filesFound,
                              onCancel: { coordinator.cancelScan() })
             case .completed(let summary):
                 ResultsView(summary: summary, coordinator: coordinator)
@@ -44,6 +39,10 @@ struct ContentView: View {
         // PermissionManager.recheck() 广播的变化通知。
         .onReceive(NotificationCenter.default.publisher(for: PermissionManager.didChangeNotification)) { _ in
             handlePermissionChange()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppDelegate.requestPermissionGuideNotification)) { _ in
+            userDismissedGuide = false
+            showPermissionGuide = true
         }
         .sheet(isPresented: $showPermissionGuide) {
             PermissionGuideView(
@@ -91,7 +90,7 @@ struct ContentView: View {
 
             // Scan Button
             Button(action: {
-                coordinator.startScan()
+                requestScan()
             }) {
                 VStack(spacing: 10) {
                     Image(systemName: "magnifyingglass.circle.fill")
@@ -161,5 +160,13 @@ struct ContentView: View {
             .keyboardShortcut(.return, modifiers: [])
         }
         .padding(40)
+    }
+
+    private func requestScan() {
+        if let appDelegate = NSApp.delegate as? AppDelegate {
+            appDelegate.requestScan()
+        } else {
+            coordinator.startScan()
+        }
     }
 }

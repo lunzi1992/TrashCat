@@ -18,6 +18,7 @@ SCHEME="TrashCat"
 CONFIG="Release"
 BUILD_DIR=".build"
 APP_NAME="TrashCat"
+BUILD_ARCHS="${TRASHCAT_ARCHS:-arm64 x86_64}"
 VOLUME_NAME="${APP_NAME}"
 DMG_NAME="TrashCat-${VERSION}.dmg"
 STAGING_DIR=".dmg-staging"
@@ -29,6 +30,7 @@ RW_DMG="${DMG_TMP}/${APP_NAME}-rw.dmg"
 
 echo "TrashCat DMG 打包工具 v${VERSION}"
 echo "================================"
+echo "目标架构：${BUILD_ARCHS}"
 echo ""
 
 # 1. Clean previous builds
@@ -45,7 +47,10 @@ xcodebuild \
     -project "${PROJECT}" \
     -scheme "${SCHEME}" \
     -configuration "${CONFIG}" \
+    -destination "generic/platform=macOS" \
     -derivedDataPath "${BUILD_DIR}" \
+    ONLY_ACTIVE_ARCH=NO \
+    ARCHS="${BUILD_ARCHS}" \
     CODE_SIGN_IDENTITY="-" \
     CODE_SIGNING_REQUIRED=NO \
     CODE_SIGNING_ALLOWED=NO \
@@ -59,6 +64,18 @@ if [ -z "${APP_PATH}" ]; then
     exit 1
 fi
 echo "✅ 构建完成：${APP_PATH}"
+
+BIN_PATH="${APP_PATH}/Contents/MacOS/${APP_NAME}"
+ARCH_INFO=$(lipo -info "${BIN_PATH}")
+echo "  架构：${ARCH_INFO}"
+if [[ "${BUILD_ARCHS}" == *"arm64"* && "${ARCH_INFO}" != *"arm64"* ]]; then
+    echo "❌ 构建失败：二进制缺少 arm64 架构"
+    exit 1
+fi
+if [[ "${BUILD_ARCHS}" == *"x86_64"* && "${ARCH_INFO}" != *"x86_64"* ]]; then
+    echo "❌ 构建失败：二进制缺少 x86_64 架构，Intel Mac 将无法打开"
+    exit 1
+fi
 echo ""
 
 # 4. Ad-hoc sign (best effort without Developer ID)

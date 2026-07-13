@@ -201,6 +201,8 @@ struct ScanSummary: Equatable {
 struct CleanResult {
     let freedSize: Int64
     let freedFileCount: Int
+    var movedToTrashSize: Int64 = 0
+    var movedToTrashFileCount: Int = 0
     let duration: TimeInterval
     let errors: [String]
     var categoryBreakdown: [(CleanCategory, Int64, Int)] = []

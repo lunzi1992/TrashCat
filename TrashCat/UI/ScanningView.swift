@@ -51,6 +51,7 @@ struct ScanningView: View {
     let category: String
     let progress: Double
     let filesScanned: Int
+    let totalScanUnits: Int
     let filesFound: Int
     let onCancel: () -> Void
 
@@ -130,8 +131,8 @@ struct ScanningView: View {
                 Text("\(category)\(dots)")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                if filesScanned > 0 {
-                    Text("\(filesScanned) / ? 个目录已扫描")
+                if totalScanUnits > 0 {
+                    Text("\(filesScanned) / \(totalScanUnits) 个扫描项已完成")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }

@@ -10,6 +10,8 @@ final class CleanManagerTests: XCTestCase {
         let result = await manager.clean(items: [])
         XCTAssertEqual(result.freedSize, 0)
         XCTAssertEqual(result.freedFileCount, 0)
+        XCTAssertEqual(result.movedToTrashSize, 0)
+        XCTAssertEqual(result.movedToTrashFileCount, 0)
         XCTAssertTrue(result.errors.isEmpty)
         XCTAssertTrue(result.isSuccess)
     }
@@ -62,6 +64,25 @@ final class CleanManagerTests: XCTestCase {
         XCTAssertEqual(result.freedFileCount, 0)
         XCTAssertFalse(result.errors.isEmpty, "Nonexistent file should produce an error")
         XCTAssertFalse(result.isSuccess)
+    }
+
+    func testTrashCategoryOutsideUserTrashIsRejected() async {
+        let manager = CleanManager()
+        let item = CleanItem(
+            path: "/tmp/not-actually-in-trash.txt",
+            name: "not-actually-in-trash.txt",
+            size: 100,
+            category: .trash
+        )
+
+        let result = await manager.clean(items: [item])
+
+        XCTAssertEqual(result.freedSize, 0)
+        XCTAssertEqual(result.freedFileCount, 0)
+        XCTAssertEqual(result.movedToTrashSize, 0)
+        XCTAssertEqual(result.movedToTrashFileCount, 0)
+        XCTAssertFalse(result.isSuccess)
+        XCTAssertTrue(result.errors.contains { $0.contains("只允许清空废纸篓中的项目") })
     }
 
     // MARK: - Result aggregation

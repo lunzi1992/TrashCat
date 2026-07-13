@@ -6,12 +6,18 @@ import AppKit
 final class MenuBarController {
     private var statusItem: NSStatusItem?
 
+    private var isScanning: (() -> Bool)?
     private var onScan: (() -> Void)?
     private var onOpen: (() -> Void)?
 
     init() {}
 
-    func setup(onScan: @escaping () -> Void, onOpen: @escaping () -> Void) {
+    func setup(
+        isScanning: @escaping () -> Bool,
+        onScan: @escaping () -> Void,
+        onOpen: @escaping () -> Void
+    ) {
+        self.isScanning = isScanning
         self.onScan = onScan
         self.onOpen = onOpen
 
@@ -62,8 +68,13 @@ final class MenuBarController {
             menu.addItem(.separator())
         }
 
-        let scanItem = NSMenuItem(title: "开始扫描", action: #selector(triggerScan), keyEquivalent: "")
-        scanItem.target = self; scanItem.isEnabled = true
+        let scanning = isScanning?() ?? false
+        let scanItem = NSMenuItem(
+            title: scanning ? "正在扫描..." : "开始扫描",
+            action: #selector(triggerScan),
+            keyEquivalent: ""
+        )
+        scanItem.target = self; scanItem.isEnabled = !scanning
         menu.addItem(scanItem)
 
         let openItem = NSMenuItem(title: "打开 TrashCat", action: #selector(openMainWindow), keyEquivalent: "")

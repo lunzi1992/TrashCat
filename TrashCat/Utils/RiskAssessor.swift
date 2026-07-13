@@ -14,12 +14,10 @@ enum RiskAssessor {
 
         return running.contains { bundleID in
             let lowered = bundleID.lowercased()
-            guard pathLower.contains(lowered) else { return false }
+            let hints = [lowered] + (runningPathHints[bundleID] ?? []).map { $0.lowercased() }
 
-            // Ensure a path-segment match, not a substring coincidence.
-            // e.g. "com.google.Chrome" matches ".../com.google.Chrome/..."
-            // but not ".../somecom.google.Chromething/..."
-            if let range = pathLower.range(of: lowered) {
+            return hints.contains { hint in
+                guard let range = pathLower.range(of: hint) else { return false }
                 let beforeOK = range.lowerBound == pathLower.startIndex
                     || pathLower[pathLower.index(before: range.lowerBound)] == "/"
                 let afterOK = range.upperBound == pathLower.endIndex
@@ -27,7 +25,6 @@ enum RiskAssessor {
                     || pathLower[range.upperBound] == "."
                 return beforeOK && afterOK
             }
-            return false
         }
     }
 
@@ -37,6 +34,38 @@ enum RiskAssessor {
         let apps = NSWorkspace.shared.runningApplications
         return Set(apps.compactMap { $0.bundleIdentifier })
     }
+
+    private static let runningPathHints: [String: [String]] = [
+        "company.thebrowser.Browser": [
+            "Application Support/Arc",
+            "Caches/company.thebrowser.Browser",
+        ],
+        "com.google.Chrome": [
+            "Application Support/Google/Chrome",
+            "Caches/Google/Chrome",
+            "Caches/com.google.Chrome",
+        ],
+        "com.microsoft.edgemac": [
+            "Application Support/Microsoft Edge",
+            "Caches/Microsoft Edge",
+            "Caches/com.microsoft.edgemac",
+        ],
+        "com.brave.Browser": [
+            "Application Support/BraveSoftware/Brave-Browser",
+            "Caches/BraveSoftware",
+            "Caches/com.brave.Browser",
+        ],
+        "org.mozilla.firefox": [
+            "Application Support/Firefox",
+            "Caches/Firefox",
+            "Caches/org.mozilla.firefox",
+        ],
+        "com.apple.Safari": [
+            "Library/Safari",
+            "Library/WebKit/com.apple.Safari",
+            "Caches/com.apple.Safari",
+        ],
+    ]
 
     // MARK: - High-risk paths (always danger)
 
@@ -105,6 +134,9 @@ enum RiskAssessor {
 
         // Browser cache subdirectories (cache-only) are safe
         if category == .browserCache {
+            if Self.isRunningAppPath(path) {
+                return .caution
+            }
             for sp in safePaths {
                 if path.contains(sp) {
                     return .safe
