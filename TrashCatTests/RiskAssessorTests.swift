@@ -145,7 +145,8 @@ final class RiskAssessorTests: XCTestCase {
         let result = RiskAssessor.assess(
             path: "/Users/test/Library/Application Support/Google/Chrome/Default/Cache/abc123",
             category: .browserCache,
-            name: "abc123"
+            name: "abc123",
+            runningBundleIDs: []
         )
         XCTAssertEqual(result, .safe)
     }
@@ -154,7 +155,8 @@ final class RiskAssessorTests: XCTestCase {
         let result = RiskAssessor.assess(
             path: "/Users/test/Library/Application Support/Google/Chrome/Default/Preferences",
             category: .browserCache,
-            name: "Preferences"
+            name: "Preferences",
+            runningBundleIDs: []
         )
         // Preferences doesn't match any safePath → falls to caution
         XCTAssertEqual(result, .caution)
@@ -164,7 +166,8 @@ final class RiskAssessorTests: XCTestCase {
         let result = RiskAssessor.assess(
             path: "/Users/test/Library/Application Support/Google/Chrome/Default/Code Cache/js_123",
             category: .browserCache,
-            name: "js_123"
+            name: "js_123",
+            runningBundleIDs: []
         )
         XCTAssertEqual(result, .safe)
     }
@@ -173,7 +176,8 @@ final class RiskAssessorTests: XCTestCase {
         let result = RiskAssessor.assess(
             path: "/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/data",
             category: .browserCache,
-            name: "data"
+            name: "data",
+            runningBundleIDs: []
         )
         XCTAssertEqual(result, .safe)
     }

@@ -84,34 +84,39 @@ final class ScanCoordinator: ObservableObject {
             let startTime = Date()
 
             // Update progress as each scanner completes
-            let results = await withTaskGroup(
-                of: (Int, ScanResult?).self
+            let outcomes = await withTaskGroup(
+                of: (Int, ScanResult?, ScanIssue?).self
             ) { group in
                 for (index, scanner) in scanners.enumerated() {
                     group.addTask {
-                        guard !Task.isCancelled else { return (index, nil) }
+                        guard !Task.isCancelled else { return (index, nil, nil) }
                         do {
                             let result = try await scanner.scan()
-                            return (index, result)
+                            return (index, result, nil)
                         } catch is CancellationError {
-                            return (index, nil)
+                            return (index, nil, nil)
                         } catch {
                             print("[TrashCat] Scanner '\(scanner.category.rawValue)' failed: \(error.localizedDescription)")
-                            return (index, ScanResult(category: scanner.category, items: []))
+                            return (index, nil, ScanIssue(
+                                scannerName: scanner.progressLabel,
+                                message: error.localizedDescription
+                            ))
                         }
                     }
                 }
 
-                var collected: [(Int, ScanResult)] = []
+                var collected: [(Int, ScanResult, ScanIssue?)] = []
                 var completedCount = 0
                 var totalFilesFound = 0
 
-                for await (index, maybeResult) in group {
+                for await (index, maybeResult, issue) in group {
                     completedCount += 1
                     let prog = Double(completedCount) / total
                     if let result = maybeResult {
                         totalFilesFound += result.items.count
-                        collected.append((index, result))
+                        collected.append((index, result, issue))
+                    } else if let issue {
+                        collected.append((index, ScanResult(category: scanners[index].category, items: []), issue))
                     }
 
                     // Live progress update
@@ -133,7 +138,7 @@ final class ScanCoordinator: ObservableObject {
                 }
 
                 collected.sort { $0.0 < $1.0 }
-                return collected.map { $0.1 }
+                return collected
             }
 
             guard !Task.isCancelled else {
@@ -145,12 +150,42 @@ final class ScanCoordinator: ObservableObject {
             }
 
             let duration = Date().timeIntervalSince(startTime)
-            let summary = ScanSummary(results: results, scanDuration: duration)
+            let summary = ScanSummary(
+                results: outcomes.map { $0.1 },
+                scanDuration: duration,
+                issues: outcomes.compactMap { $0.2 }
+            )
             await MainActor.run {
                 guard self.scanGeneration == generation else { return }
                 self.state = .completed(summary)
             }
         }
+    }
+
+    /// Run a fresh scan without replacing the current screen. Used after
+    /// cleanup to verify that handled paths no longer appear in scan results.
+    func verificationScan() async -> ScanSummary {
+        let scanners = self.scanners
+        let startTime = Date()
+        let outcomes = await withTaskGroup(of: (Int, ScanResult?, ScanIssue?).self) { group in
+            for (index, scanner) in scanners.enumerated() {
+                group.addTask {
+                    do {
+                        return (index, try await scanner.scan(), nil)
+                    } catch {
+                        return (index, nil, ScanIssue(scannerName: scanner.progressLabel, message: error.localizedDescription))
+                    }
+                }
+            }
+            var values: [(Int, ScanResult?, ScanIssue?)] = []
+            for await value in group { values.append(value) }
+            return values.sorted { $0.0 < $1.0 }
+        }
+        return ScanSummary(
+            results: outcomes.compactMap { $0.1 },
+            scanDuration: Date().timeIntervalSince(startTime),
+            issues: outcomes.compactMap { $0.2 }
+        )
     }
 
     func cancelScan() {

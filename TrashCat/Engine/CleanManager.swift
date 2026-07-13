@@ -21,6 +21,7 @@ final class CleanManager {
                 continue
             }
             do {
+                try validateImmediatelyBeforeCleaning(item)
                 if item.category == .trash {
                     try deleteTrashItem(path: item.path)
                     freedSize += item.size
@@ -51,6 +52,35 @@ final class CleanManager {
             errors: errors,
             categoryBreakdown: breakdown
         )
+    }
+
+    private func validateImmediatelyBeforeCleaning(_ item: CleanItem) throws {
+        let resolvedPath = URL(fileURLWithPath: item.path)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            .path
+
+        guard fileManager.fileExists(atPath: item.path) else {
+            throw NSError(
+                domain: "TrashCat.CleanManager",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "文件已发生变化，请重新扫描"]
+            )
+        }
+        guard !ScanPolicy.isBlocked(resolvedPath) else {
+            throw NSError(
+                domain: "TrashCat.CleanManager",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "路径受到系统保护，已跳过"]
+            )
+        }
+        if item.category == .browserCache && RiskAssessor.isRunningAppPath(resolvedPath) {
+            throw NSError(
+                domain: "TrashCat.CleanManager",
+                code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "对应浏览器正在运行，请退出浏览器后重新扫描"]
+            )
+        }
     }
 
     /// Move a single file/directory to Trash

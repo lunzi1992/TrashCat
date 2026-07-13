@@ -591,6 +591,7 @@ private struct CleaningOverlay: View {
     let selectedCount: Int
     let selectedSize: Int64
     let includesTrashItems: Bool
+    let isVerifying: Bool
 
     @State private var pulse = false
 
@@ -613,20 +614,24 @@ private struct CleaningOverlay: View {
                 }
 
                 VStack(spacing: 6) {
-                    Text("正在清理...")
+                    Text(isVerifying ? "正在复扫验证..." : "正在清理...")
                         .font(.title3)
                         .fontWeight(.bold)
-                    Text(includesTrashItems ? "正在处理 \(selectedCount) 个文件，废纸篓项目会被清空" : "正在把 \(selectedCount) 个文件移入废纸篓")
+                    Text(isVerifying
+                         ? "正在确认已处理内容是否仍出现在扫描结果中"
+                         : (includesTrashItems ? "正在处理 \(selectedCount) 个文件，废纸篓项目会被清空" : "正在把 \(selectedCount) 个文件移入废纸篓"))
                         .font(.body)
-                    Text("选中大小 \(selectedSize.formattedSize)，完成后会显示本次清理结果")
+                    Text(isVerifying ? "验证完成后会显示真实处理结果" : "选中大小 \(selectedSize.formattedSize)，完成后会显示本次清理结果")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
                 .multilineTextAlignment(.center)
 
                 HStack(spacing: 6) {
-                    Image(systemName: "trash")
-                    Text(includesTrashItems ? "新移入废纸篓的文件仍可恢复，已在废纸篓中的项目会释放空间" : "文件会先进入废纸篓，清空废纸篓后才会真正释放空间")
+                    Image(systemName: isVerifying ? "checkmark.shield" : "trash")
+                    Text(isVerifying
+                         ? "复扫用于识别应用立即重建的缓存"
+                         : (includesTrashItems ? "新移入废纸篓的文件仍可恢复，已在废纸篓中的项目会释放空间" : "文件会先进入废纸篓，清空废纸篓后才会真正释放空间"))
                 }
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -660,6 +665,7 @@ struct ResultsView: View {
     @State private var cleaningCount = 0
     @State private var cleaningSize: Int64 = 0
     @State private var cleaningIncludesTrashItems = false
+    @State private var isVerifying = false
 
     private let allItems: [CleanItem]
     private let tierGroups: [TierGroup]
@@ -748,7 +754,8 @@ struct ResultsView: View {
                 CleaningOverlay(
                     selectedCount: cleaningCount,
                     selectedSize: cleaningSize,
-                    includesTrashItems: cleaningIncludesTrashItems
+                    includesTrashItems: cleaningIncludesTrashItems,
+                    isVerifying: isVerifying
                 )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
@@ -784,6 +791,21 @@ struct ResultsView: View {
                         .foregroundColor(.secondary)
                     Spacer()
                 }
+            }
+            if !summary.issues.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("本次有 \(summary.issues.count) 个扫描项未完成，结果可能不完整")
+                        .font(.caption)
+                    Spacer()
+                    Text(summary.issues.map(\.scannerName).joined(separator: "、"))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.08)))
             }
         }.padding(.horizontal, 20).padding(.vertical, 14)
     }
@@ -908,15 +930,41 @@ struct ResultsView: View {
         isCleaning = true
 
         Task {
-            let result = await CleanManager().clean(items: cleanable)
+            var result = await CleanManager().clean(items: cleanable)
+            await MainActor.run { isVerifying = true }
+            let verificationSummary = await coordinator.verificationScan()
+            let rescanned = Dictionary(
+                uniqueKeysWithValues: verificationSummary.results
+                    .flatMap(\.items)
+                    .map { (normalizedPath($0.path), $0) }
+            )
+            let handledPaths = cleanable.map { normalizedPath($0.path) }
+            let remaining = handledPaths.compactMap { rescanned[$0] }
+            result.verification = CleanVerification(
+                checkedCount: handledPaths.count,
+                removedCount: handledPaths.count - remaining.count,
+                remainingCount: remaining.count,
+                remainingSize: remaining.reduce(0) { $0 + $1.size },
+                scanIssueCount: verificationSummary.issues.count
+            )
             await MainActor.run {
                 isCleaning = false
+                isVerifying = false
                 cleanResult = result
-                if result.isSuccess {
-                    ScanHistory.record(freedSize: result.freedSize, fileCount: result.freedFileCount)
+                if result.freedFileCount + result.movedToTrashFileCount > 0 {
+                    ScanHistory.record(
+                        freedSize: result.freedSize,
+                        fileCount: result.freedFileCount,
+                        movedToTrashSize: result.movedToTrashSize,
+                        movedToTrashCount: result.movedToTrashFileCount
+                    )
                 }
             }
         }
+    }
+
+    private func normalizedPath(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path
     }
 
     private var selectedCleanableItems: [CleanItem] {

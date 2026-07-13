@@ -47,6 +47,25 @@ struct CleanReportView: View {
             }
             .font(.body)
 
+            if let verification = result.verification {
+                HStack(spacing: 8) {
+                    Image(systemName: verification.isVerified ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
+                        .foregroundColor(verification.isVerified ? .green : .orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verification.isVerified
+                             ? "复扫验证通过"
+                             : (verification.scanIssueCount > 0 ? "复扫验证不完整" : "复扫发现部分内容仍存在"))
+                            .font(.caption).fontWeight(.semibold)
+                        Text(verificationText(verification))
+                            .font(.caption2).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 8).fill((verification.isVerified ? Color.green : Color.orange).opacity(0.07)))
+                .frame(maxWidth: 340)
+            }
+
             // ── Category breakdown ──
             if !result.categoryBreakdown.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -139,5 +158,15 @@ struct CleanReportView: View {
             parts.append("\(result.freedFileCount) 个废纸篓项目已清空")
         }
         return parts.isEmpty ? "请查看下方错误信息" : parts.joined(separator: "，")
+    }
+
+    private func verificationText(_ verification: CleanVerification) -> String {
+        if verification.scanIssueCount > 0 {
+            return "有 \(verification.scanIssueCount) 个扫描项未完成，不能确认本次结果"
+        }
+        if verification.isVerified {
+            return "已处理的 \(verification.checkedCount) 个路径未再次出现在扫描结果中"
+        }
+        return "仍有 \(verification.remainingCount) 项，共 \(verification.remainingSize.formattedSize)，可能已被应用重新生成"
     }
 }

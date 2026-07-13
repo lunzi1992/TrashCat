@@ -64,6 +64,32 @@ final class CleanItemTests: XCTestCase {
         XCTAssertFalse(item.defaultSelected, "Danger items should not be default selected")
     }
 
+    func testRuleRiskCannotBeDowngradedByPathAssessment() {
+        let item = CleanItem(
+            path: "/Users/x/.gradle/caches/modules/files.bin",
+            name: "files.bin",
+            size: 10,
+            category: .cache,
+            ruleId: "gradle-cache"
+        )
+        XCTAssertEqual(item.riskLevel, .caution)
+        XCTAssertFalse(item.defaultSelected)
+    }
+
+    func testScanSummaryDeduplicatesResolvedPaths() {
+        let first = CleanItem(path: "/tmp/example", name: "example", size: 10, category: .temp)
+        let second = CleanItem(path: "/private/tmp/example", name: "example", size: 10, category: .temp)
+        let summary = ScanSummary(
+            results: [
+                ScanResult(category: .temp, items: [first]),
+                ScanResult(category: .temp, items: [second]),
+            ],
+            scanDuration: 0
+        )
+        XCTAssertEqual(summary.totalFileCount, 1)
+        XCTAssertEqual(summary.totalSize, 10)
+    }
+
     // MARK: - RiskLevel ordering
 
     func testRiskLevelOrdering() {

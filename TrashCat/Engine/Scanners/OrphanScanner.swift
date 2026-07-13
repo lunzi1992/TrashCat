@@ -92,8 +92,7 @@ final class OrphanScanner: Scannable {
             var ids = Set<String>()
             let paths = output.components(separatedBy: "\n").filter { !$0.isEmpty }
 
-            // Limit to avoid scanning thousands of apps
-            for path in paths.prefix(500) {
+            for path in paths {
                 if let bundle = Bundle(url: URL(fileURLWithPath: path)),
                    let id = bundle.bundleIdentifier {
                     ids.insert(id)
@@ -156,8 +155,7 @@ final class OrphanScanner: Scannable {
             }
 
             if !matched {
-                guard let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey]),
-                      let fileSize = resourceValues.fileSize else {
+                guard let fileSize = itemSize(at: url), fileSize > 0 else {
                     continue
                 }
 
@@ -172,5 +170,31 @@ final class OrphanScanner: Scannable {
         }
 
         return items
+    }
+
+    private func itemSize(at url: URL) -> Int64? {
+        guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey]) else {
+            return nil
+        }
+        guard values.isDirectory == true else {
+            return values.fileSize.map(Int64.init)
+        }
+
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
+            options: [.skipsHiddenFiles],
+            errorHandler: { _, _ in true }
+        ) else { return nil }
+
+        var total: Int64 = 0
+        for case let child as URL in enumerator {
+            guard !ScanPolicy.isBlocked(child.path),
+                  let childValues = try? child.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey]),
+                  childValues.isDirectory != true,
+                  let size = childValues.fileSize else { continue }
+            total += Int64(size)
+        }
+        return total
     }
 }

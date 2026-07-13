@@ -131,7 +131,11 @@ struct CleanItem: Identifiable, Equatable {
 
     /// How risky this item is to delete
     var riskLevel: RiskLevel {
-        RiskAssessor.assess(path: path, category: category, name: name)
+        let dynamicRisk = RiskAssessor.assess(path: path, category: category, name: name)
+        guard let ruleRisk = rule?.riskLevel else { return dynamicRisk }
+        // The registry is the product safety baseline. Runtime checks may only
+        // raise risk, never silently downgrade a rule.
+        return max(ruleRisk, dynamicRisk)
     }
 
     /// Should this item be selected for cleanup by default?
@@ -182,6 +186,23 @@ struct ScanResult: Equatable {
 struct ScanSummary: Equatable {
     let results: [ScanResult]
     let scanDuration: TimeInterval
+    let issues: [ScanIssue]
+
+    init(results: [ScanResult], scanDuration: TimeInterval, issues: [ScanIssue] = []) {
+        var seenPaths = Set<String>()
+        self.results = results.map { result in
+            let uniqueItems = result.items.filter { item in
+                let key = URL(fileURLWithPath: item.path)
+                    .standardizedFileURL
+                    .resolvingSymlinksInPath()
+                    .path
+                return seenPaths.insert(key).inserted
+            }
+            return ScanResult(category: result.category, items: uniqueItems, ruleId: result.ruleId)
+        }
+        self.scanDuration = scanDuration
+        self.issues = issues
+    }
 
     var totalSize: Int64 {
         results.reduce(0) { $0 + $1.totalSize }
@@ -196,6 +217,18 @@ struct ScanSummary: Equatable {
     }
 }
 
+struct ScanIssue: Equatable, Identifiable {
+    let id: String
+    let scannerName: String
+    let message: String
+
+    init(scannerName: String, message: String) {
+        self.id = scannerName
+        self.scannerName = scannerName
+        self.message = message
+    }
+}
+
 // MARK: - Clean Result
 
 struct CleanResult {
@@ -206,10 +239,21 @@ struct CleanResult {
     let duration: TimeInterval
     let errors: [String]
     var categoryBreakdown: [(CleanCategory, Int64, Int)] = []
+    var verification: CleanVerification? = nil
 
     var isSuccess: Bool {
         errors.isEmpty
     }
+}
+
+struct CleanVerification {
+    let checkedCount: Int
+    let removedCount: Int
+    let remainingCount: Int
+    let remainingSize: Int64
+    let scanIssueCount: Int
+
+    var isVerified: Bool { remainingCount == 0 && scanIssueCount == 0 }
 }
 
 // MARK: - Deletion Strategy

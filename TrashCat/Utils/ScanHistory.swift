@@ -6,6 +6,8 @@ struct ScanHistoryRecord: Codable, Identifiable {
     let date: Date
     let freedSize: Int64
     let freedFileCount: Int
+    let movedToTrashSize: Int64?
+    let movedToTrashCount: Int?
 }
 
 enum ScanHistory {
@@ -13,9 +15,20 @@ enum ScanHistory {
     private static let maxRecords = 50
 
     /// Append a new clean record
-    static func record(freedSize: Int64, fileCount: Int) {
+    static func record(
+        freedSize: Int64,
+        fileCount: Int,
+        movedToTrashSize: Int64 = 0,
+        movedToTrashCount: Int = 0
+    ) {
         var records = load()
-        records.append(ScanHistoryRecord(date: Date(), freedSize: freedSize, freedFileCount: fileCount))
+        records.append(ScanHistoryRecord(
+            date: Date(),
+            freedSize: freedSize,
+            freedFileCount: fileCount,
+            movedToTrashSize: movedToTrashSize,
+            movedToTrashCount: movedToTrashCount
+        ))
         if records.count > maxRecords { records.removeFirst(records.count - maxRecords) }
         save(records)
     }

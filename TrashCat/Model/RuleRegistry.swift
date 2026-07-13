@@ -307,20 +307,6 @@ enum RuleRegistry {
         ),
 
         CleanRule(
-            id: "npm-cache",
-            title: "npm 缓存",
-            description: "npm 下载的包缓存",
-            paths: ["~/.npm"],
-            category: .cache,
-            riskLevel: .caution,
-            defaultSelected: false,
-            deletionUnit: .perFile,
-            minAgeDays: nil,
-            deleteStrategy: .trashItem,
-            impactSummary: "下次 npm install 需重新下载包。可先用 npm cache verify"
-        ),
-
-        CleanRule(
             id: "maven-cache",
             title: "Maven 缓存",
             description: "Maven 本地仓库缓存，JVM 项目的依赖 jar 包",

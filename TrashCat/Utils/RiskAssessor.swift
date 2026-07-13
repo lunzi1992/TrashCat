@@ -8,8 +8,8 @@ enum RiskAssessor {
 
     /// Check whether a file path is likely associated with a currently running app.
     /// Used to avoid cleaning caches that an active app may be writing to.
-    static func isRunningAppPath(_ path: String) -> Bool {
-        let running = Self.runningBundleIDs
+    static func isRunningAppPath(_ path: String, runningBundleIDs: Set<String>? = nil) -> Bool {
+        let running = runningBundleIDs ?? Self.runningBundleIDs
         let pathLower = path.lowercased()
 
         return running.contains { bundleID in
@@ -117,7 +117,12 @@ enum RiskAssessor {
 
     // MARK: - Assessment
 
-    static func assess(path: String, category: CleanCategory, name: String) -> RiskLevel {
+    static func assess(
+        path: String,
+        category: CleanCategory,
+        name: String,
+        runningBundleIDs: Set<String>? = nil
+    ) -> RiskLevel {
         // Trash is always safe to clean — it's already trash
         if category == .trash { return .safe }
 
@@ -134,7 +139,7 @@ enum RiskAssessor {
 
         // Browser cache subdirectories (cache-only) are safe
         if category == .browserCache {
-            if Self.isRunningAppPath(path) {
+            if Self.isRunningAppPath(path, runningBundleIDs: runningBundleIDs) {
                 return .caution
             }
             for sp in safePaths {
@@ -166,7 +171,7 @@ enum RiskAssessor {
 
             // Running app check: if this cache belongs to a running app,
             // downgrade from safe to caution to avoid potential data loss.
-            if Self.isRunningAppPath(path) {
+            if Self.isRunningAppPath(path, runningBundleIDs: runningBundleIDs) {
                 return .caution
             }
 
@@ -180,7 +185,7 @@ enum RiskAssessor {
         if category == .temp { return .safe }
 
         // Running app check for browser cache
-        if category == .browserCache && Self.isRunningAppPath(path) {
+        if category == .browserCache && Self.isRunningAppPath(path, runningBundleIDs: runningBundleIDs) {
             return .caution
         }
 

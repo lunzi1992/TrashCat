@@ -124,7 +124,7 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundColor(.green)
                     }
-                    Text("累计清理 \(ScanHistory.totalSessions()) 次")
+                    Text("累计处理 \(ScanHistory.totalSessions()) 次")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
