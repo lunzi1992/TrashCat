@@ -14,9 +14,9 @@ struct ContentView: View {
             switch coordinator.state {
             case .idle:
                 idleView
-            case .scanning(let category, let progress, let filesScanned, let totalScanUnits, let filesFound):
+            case .scanning(let category, let progress, _, _, let filesFound):
                 ScanningView(category: category, progress: progress,
-                             filesScanned: filesScanned, totalScanUnits: totalScanUnits, filesFound: filesFound,
+                             filesFound: filesFound,
                              onCancel: { coordinator.cancelScan() })
             case .completed(let summary):
                 ResultsView(summary: summary, coordinator: coordinator)

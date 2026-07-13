@@ -35,6 +35,12 @@ enum RiskAssessor {
         return Set(apps.compactMap { $0.bundleIdentifier })
     }
 
+    /// Snapshot once before evaluating a batch of scan results. Querying
+    /// NSWorkspace for every file makes the results screen unnecessarily slow.
+    static var currentRunningBundleIDs: Set<String> {
+        runningBundleIDs
+    }
+
     private static let runningPathHints: [String: [String]] = [
         "company.thebrowser.Browser": [
             "Application Support/Arc",

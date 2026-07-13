@@ -155,6 +155,9 @@ final class ScanPolicyTests: XCTestCase {
             "qq-data",
             "telegram-data",
             "virtual-machines",
+            "old-dmg-files",
+            "stale-downloads",
+            "large-user-files",
         ]
 
         for ruleId in diagnosticRuleIds {

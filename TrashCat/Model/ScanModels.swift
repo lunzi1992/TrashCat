@@ -1,5 +1,11 @@
 import Foundation
 
+private let trashCatByteCountFormatter: ByteCountFormatter = {
+    let formatter = ByteCountFormatter()
+    formatter.countStyle = .file
+    return formatter
+}()
+
 // MARK: - Risk Level
 
 enum RiskLevel: String, Comparable, CaseIterable {
@@ -187,21 +193,36 @@ struct ScanSummary: Equatable {
     let results: [ScanResult]
     let scanDuration: TimeInterval
     let issues: [ScanIssue]
+    var presentation: ScanPresentation?
 
-    init(results: [ScanResult], scanDuration: TimeInterval, issues: [ScanIssue] = []) {
+    init(
+        results: [ScanResult],
+        scanDuration: TimeInterval,
+        issues: [ScanIssue] = [],
+        presentation: ScanPresentation? = nil
+    ) {
         var seenPaths = Set<String>()
         self.results = results.map { result in
             let uniqueItems = result.items.filter { item in
-                let key = URL(fileURLWithPath: item.path)
-                    .standardizedFileURL
-                    .resolvingSymlinksInPath()
-                    .path
+                let key = Self.deduplicationKey(for: item.path)
                 return seenPaths.insert(key).inserted
             }
             return ScanResult(category: result.category, items: uniqueItems, ruleId: result.ruleId)
         }
         self.scanDuration = scanDuration
         self.issues = issues
+        self.presentation = presentation
+    }
+
+    private static func deduplicationKey(for path: String) -> String {
+        var key = URL(fileURLWithPath: path).standardizedFileURL.path
+        // /tmp is a stable alias of /private/tmp on macOS. Handle the known
+        // overlap without resolving every scanned file through the filesystem.
+        if key == "/tmp" { return "/private/tmp" }
+        if key.hasPrefix("/tmp/") {
+            key = "/private" + key
+        }
+        return key
     }
 
     var totalSize: Int64 {
@@ -215,6 +236,12 @@ struct ScanSummary: Equatable {
     var isEmpty: Bool {
         results.allSatisfy { $0.items.isEmpty }
     }
+
+    static func == (lhs: ScanSummary, rhs: ScanSummary) -> Bool {
+        lhs.results == rhs.results
+            && lhs.scanDuration == rhs.scanDuration
+            && lhs.issues == rhs.issues
+    }
 }
 
 struct ScanIssue: Equatable, Identifiable {
@@ -226,6 +253,121 @@ struct ScanIssue: Equatable, Identifiable {
         self.id = scannerName
         self.scannerName = scannerName
         self.message = message
+    }
+}
+
+struct ScanPresentation {
+    let items: [CleanItem]
+    let tierGroups: [TierGroup]
+    let riskByID: [UUID: RiskLevel]
+    let nonCleanableIDs: Set<UUID>
+    let selectionIndex: ScanSelectionIndex
+
+    static func build(summary: ScanSummary, runningBundleIDs: Set<String>) -> ScanPresentation {
+        let items = summary.results.flatMap { $0.items }
+        let riskByID = Dictionary(uniqueKeysWithValues: items.map { item in
+            let dynamicRisk = RiskAssessor.assess(
+                path: item.path,
+                category: item.category,
+                name: item.name,
+                runningBundleIDs: runningBundleIDs
+            )
+            let risk = item.rule.map { max($0.riskLevel, dynamicRisk) } ?? dynamicRisk
+            return (item.id, risk)
+        })
+        let groups = summary.buildTierGroups(riskByID: riskByID)
+        let nonCleanableIDs = Set(items.lazy.filter { !$0.isCleanable }.map { $0.id })
+        return ScanPresentation(
+            items: items,
+            tierGroups: groups,
+            riskByID: riskByID,
+            nonCleanableIDs: nonCleanableIDs,
+            selectionIndex: ScanSelectionIndex.build(
+                items: items,
+                tierGroups: groups,
+                nonCleanableIDs: nonCleanableIDs,
+                riskByID: riskByID
+            )
+        )
+    }
+}
+
+struct ScanSelectionIndex {
+    let sizeOf: [UUID: Int64]
+    let riskOf: [UUID: RiskLevel]
+    let cleanableIDs: Set<UUID>
+    let recommendedIDs: Set<UUID>
+    let groupIDs: [String: Set<UUID>]
+    let groupTotals: [String: Int]
+    let itemGroups: [UUID: [String]]
+    let initialSelectedIDs: Set<UUID>
+    let initialSelectedSize: Int64
+    let initialRiskCounts: [RiskLevel: Int]
+    let initialUnsafeCount: Int
+    let initialGroupSelectedCounts: [String: Int]
+
+    static func build(
+        items: [CleanItem],
+        tierGroups: [TierGroup],
+        nonCleanableIDs: Set<UUID>,
+        riskByID: [UUID: RiskLevel]
+    ) -> ScanSelectionIndex {
+        let sizeOf = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0.size) })
+        let cleanableIDs = Set(items.lazy.filter(\.isCleanable).map(\.id))
+        let recommendedIDs = Set(items.lazy.filter {
+            cleanableIDs.contains($0.id)
+                && $0.category != .trash
+                && riskByID[$0.id] == .safe
+        }.map(\.id))
+
+        var groupIDs: [String: Set<UUID>] = [:]
+        var groupTotals: [String: Int] = [:]
+        var itemGroups: [UUID: [String]] = [:]
+
+        func register(_ key: String, rawIDs: Set<UUID>) {
+            let ids = rawIDs.subtracting(nonCleanableIDs).intersection(cleanableIDs)
+            groupIDs[key] = ids
+            groupTotals[key] = ids.count
+            for id in ids { itemGroups[id, default: []].append(key) }
+        }
+
+        for tier in tierGroups {
+            register("tier:\(tier.id)", rawIDs: tier.allIds)
+            for rule in tier.rules {
+                register("rule:\(rule.id)", rawIDs: rule.allIds)
+                for app in rule.apps {
+                    register("app:\(app.id)", rawIDs: app.ids)
+                }
+            }
+        }
+
+        let selectedIDs = recommendedIDs
+        var selectedSize: Int64 = 0
+        var riskCounts: [RiskLevel: Int] = [:]
+        var unsafeCount = 0
+        var groupSelectedCounts: [String: Int] = [:]
+        for id in selectedIDs {
+            selectedSize += sizeOf[id] ?? 0
+            let risk = riskByID[id] ?? .safe
+            riskCounts[risk, default: 0] += 1
+            if risk != .safe { unsafeCount += 1 }
+            for key in itemGroups[id] ?? [] { groupSelectedCounts[key, default: 0] += 1 }
+        }
+
+        return ScanSelectionIndex(
+            sizeOf: sizeOf,
+            riskOf: riskByID,
+            cleanableIDs: cleanableIDs,
+            recommendedIDs: recommendedIDs,
+            groupIDs: groupIDs,
+            groupTotals: groupTotals,
+            itemGroups: itemGroups,
+            initialSelectedIDs: selectedIDs,
+            initialSelectedSize: selectedSize,
+            initialRiskCounts: riskCounts,
+            initialUnsafeCount: unsafeCount,
+            initialGroupSelectedCounts: groupSelectedCounts
+        )
     }
 }
 
@@ -338,7 +480,7 @@ struct TierGroup: Identifiable {
 
 extension ScanSummary {
     /// Build the 3-level aggregation: Tier → Rule → App
-    func buildTierGroups() -> [TierGroup] {
+    func buildTierGroups(riskByID: [UUID: RiskLevel]? = nil) -> [TierGroup] {
         let allItems = results.flatMap { $0.items }.filter {
             $0.category != .trash && $0.category != .diagnostic
         }
@@ -347,7 +489,8 @@ extension ScanSummary {
 
         var tierMap: [RiskLevel: [CleanItem]] = [:]
         for item in allItems {
-            tierMap[item.riskLevel, default: []].append(item)
+            let risk = riskByID?[item.id] ?? item.riskLevel
+            tierMap[risk, default: []].append(item)
         }
 
         let levels: [RiskLevel] = [.safe, .caution, .danger]
@@ -416,8 +559,6 @@ extension ScanSummary {
 
 extension Int64 {
     var formattedSize: String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: self)
+        trashCatByteCountFormatter.string(fromByteCount: self)
     }
 }

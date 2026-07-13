@@ -525,6 +525,48 @@ enum RuleRegistry {
             deleteStrategy: .manualOnly,
             impactSummary: "通常包含完整系统磁盘镜像。删除前必须确认虚拟机已不再需要"
         ),
+
+        CleanRule(
+            id: "old-dmg-files",
+            title: "长期未使用的 DMG",
+            description: "下载目录中超过 30 天未修改的 macOS 安装镜像",
+            paths: [],
+            category: .diagnostic,
+            riskLevel: .danger,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: 30,
+            deleteStrategy: .manualOnly,
+            impactSummary: "通常是已经使用过的安装包；删除前确认不再需要离线重装或保留特定版本"
+        ),
+
+        CleanRule(
+            id: "stale-downloads",
+            title: "陈旧下载文件",
+            description: "下载目录中超过 180 天未修改且大于 10MB 的文件",
+            paths: [],
+            category: .diagnostic,
+            riskLevel: .danger,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: 180,
+            deleteStrategy: .manualOnly,
+            impactSummary: "可能是旧安装包、压缩包或用户资料，需要逐项确认后处理"
+        ),
+
+        CleanRule(
+            id: "large-user-files",
+            title: "用户目录大文件",
+            description: "下载、桌面、文稿和影片目录中超过 1GB 的单个文件",
+            paths: [],
+            category: .diagnostic,
+            riskLevel: .danger,
+            defaultSelected: false,
+            deletionUnit: .perFile,
+            minAgeDays: nil,
+            deleteStrategy: .manualOnly,
+            impactSummary: "可能是视频、镜像、压缩包或重要资料，只定位来源，不自动删除"
+        ),
     ]
 
     /// O(1) lookup by rule ID

@@ -50,8 +50,6 @@ private struct MouseWalk {
 struct ScanningView: View {
     let category: String
     let progress: Double
-    let filesScanned: Int
-    let totalScanUnits: Int
     let filesFound: Int
     let onCancel: () -> Void
 
@@ -131,11 +129,6 @@ struct ScanningView: View {
                 Text("\(category)\(dots)")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                if totalScanUnits > 0 {
-                    Text("\(filesScanned) / \(totalScanUnits) 个扫描项已完成")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
             }
             .onReceive(dotsTimer) { _ in
                 dots = dots.count >= 3 ? "" : dots + "."

@@ -111,7 +111,9 @@ final class ScanCoordinator: ObservableObject {
 
                 for await (index, maybeResult, issue) in group {
                     completedCount += 1
-                    let prog = Double(completedCount) / total
+                    // Reserve the final 5% for result preparation so the UI
+                    // never shows 100% and then appears frozen.
+                    let prog = (Double(completedCount) / total) * 0.95
                     if let result = maybeResult {
                         totalFilesFound += result.items.count
                         collected.append((index, result, issue))
@@ -149,12 +151,31 @@ final class ScanCoordinator: ObservableObject {
                 return
             }
 
+            await MainActor.run {
+                guard self.scanGeneration == generation else { return }
+                self.state = .scanning(
+                    currentCategory: "正在整理扫描结果...",
+                    progress: 0.97,
+                    filesScanned: totalScanUnits,
+                    totalScanUnits: totalScanUnits,
+                    filesFound: outcomes.reduce(0) { $0 + $1.1.items.count }
+                )
+            }
+
             let duration = Date().timeIntervalSince(startTime)
-            let summary = ScanSummary(
-                results: outcomes.map { $0.1 },
-                scanDuration: duration,
-                issues: outcomes.compactMap { $0.2 }
-            )
+            let runningBundleIDs = RiskAssessor.currentRunningBundleIDs
+            let summary = await Task.detached(priority: .userInitiated) {
+                var prepared = ScanSummary(
+                    results: outcomes.map { $0.1 },
+                    scanDuration: duration,
+                    issues: outcomes.compactMap { $0.2 }
+                )
+                prepared.presentation = ScanPresentation.build(
+                    summary: prepared,
+                    runningBundleIDs: runningBundleIDs
+                )
+                return prepared
+            }.value
             await MainActor.run {
                 guard self.scanGeneration == generation else { return }
                 self.state = .completed(summary)

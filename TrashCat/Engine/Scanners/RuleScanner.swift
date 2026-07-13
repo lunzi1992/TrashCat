@@ -115,6 +115,7 @@ final class SpaceDiagnosticScanner: Scannable {
         async let docker = Task.detached { self.checkDockerData() }.value
         async let chats = Task.detached { self.checkChatApps() }.value
         async let virtualMachines = Task.detached { self.checkVirtualMachines() }.value
+        async let userFiles = Task.detached { self.checkUserFiles() }.value
 
         var items: [CleanItem] = []
         items.append(contentsOf: await tm)
@@ -125,6 +126,7 @@ final class SpaceDiagnosticScanner: Scannable {
         items.append(contentsOf: await docker)
         items.append(contentsOf: await chats)
         items.append(contentsOf: await virtualMachines)
+        items.append(contentsOf: await userFiles)
 
         return ScanResult(category: .diagnostic, items: items)
     }
@@ -339,6 +341,73 @@ final class SpaceDiagnosticScanner: Scannable {
                 allowedExtensions: extensions
             ))
         }
+        return items
+    }
+
+    // MARK: - Downloads and Large User Files
+
+    private func checkUserFiles() -> [CleanItem] {
+        let home = fileManager.homeDirectoryForCurrentUser.path
+        let roots = ["Downloads", "Desktop", "Documents", "Movies"]
+            .map { "\(home)/\($0)" }
+        let downloadsRoot = "\(home)/Downloads/"
+        let now = Date()
+        let oldDMGCutoff = Calendar.current.date(byAdding: .day, value: -30, to: now) ?? now
+        let staleDownloadCutoff = Calendar.current.date(byAdding: .day, value: -180, to: now) ?? now
+        let staleMinimumSize: Int64 = 10 * 1024 * 1024
+        let largeFileMinimumSize: Int64 = 1024 * 1024 * 1024
+        let maxItems = 200
+        var items: [CleanItem] = []
+
+        for root in roots where items.count < maxItems {
+            guard fileManager.fileExists(atPath: root),
+                  let enumerator = fileManager.enumerator(
+                    at: URL(fileURLWithPath: root),
+                    includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey],
+                    options: [.skipsHiddenFiles, .skipsPackageDescendants],
+                    errorHandler: { _, _ in true }
+                  ) else { continue }
+
+            for case let url as URL in enumerator {
+                guard items.count < maxItems else { break }
+                guard !Task.isCancelled, !ScanPolicy.isBlocked(url.path),
+                      let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]),
+                      values.isRegularFile == true,
+                      let rawSize = values.fileSize,
+                      rawSize > 0 else { continue }
+
+                let size = Int64(rawSize)
+                let modified = values.contentModificationDate ?? now
+                let ageDays = max(0, Calendar.current.dateComponents([.day], from: modified, to: now).day ?? 0)
+                let isInDownloads = url.path.hasPrefix(downloadsRoot)
+
+                let ruleID: String?
+                let prefix: String
+                if isInDownloads && url.pathExtension.lowercased() == "dmg" && modified < oldDMGCutoff {
+                    ruleID = "old-dmg-files"
+                    prefix = "长期未使用的 DMG"
+                } else if isInDownloads && modified < staleDownloadCutoff && size >= staleMinimumSize {
+                    ruleID = "stale-downloads"
+                    prefix = "陈旧下载"
+                } else if size >= largeFileMinimumSize {
+                    ruleID = "large-user-files"
+                    prefix = "大文件"
+                } else {
+                    ruleID = nil
+                    prefix = ""
+                }
+
+                guard let ruleID else { continue }
+                items.append(CleanItem(
+                    path: url.path,
+                    name: "\(prefix)：\(url.lastPathComponent)（约 \(ageDays) 天未修改）",
+                    size: size,
+                    category: .diagnostic,
+                    ruleId: ruleID
+                ))
+            }
+        }
+
         return items
     }
 
